@@ -18,3 +18,4 @@ ChipCheck is a hardware-in-the-loop (HIL) test station that:
 ## Documentation
 
 - [Product Requirements Document (PRD)](./docs/adaptive-hardware-fuzzing-prd.md)
+- [HLD 01: System Context and Platform Boundaries](./docs/01-activequal-system-context-and-platform-boundaries.md)

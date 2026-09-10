@@ -1,0 +1,474 @@
+# ActiveQual HLD 01: System Context and Platform Boundaries
+
+**Project:** ActiveQual: AI-Driven Adaptive Physical Testing for Embedded Systems  
+**Document type:** High-Level Design  
+**Status:** Draft for team review  
+**Target delivery:** 12-week proof of concept  
+**Primary audience:** Student implementation team, faculty guide, and technical evaluators  
+**Implementation reference:** Current internal application-stack conventions were inspected before drafting  
+
+## 1. Purpose
+
+This document defines the boundary of the first ActiveQual implementation and shows how it fits the selected application stack.
+
+ActiveQual runs budgeted physical experiments against a declared low-voltage embedded device. For each experiment, it selects a legal operating condition, checks the condition against deterministic safety rules, applies the condition to real hardware, records what actually happened, classifies the outcome, and uses that result when selecting later experiments.
+
+This document answers five high-level questions:
+
+1. Who interacts with ActiveQual?
+2. Which parts run in the application platform?
+3. Which parts must remain beside the physical hardware?
+4. Where do safety authority and data ownership live?
+5. What crosses each system boundary?
+
+Detailed hardware circuitry, RPC schemas, database tables, adaptive-search mathematics, and episode state transitions belong in later HLD documents.
+
+## 2. Decision labels
+
+The document uses these labels so that verified stack conventions are not confused with new ActiveQual design decisions.
+
+- **Verified stack pattern:** Confirmed from the current implementation repository.
+- **ActiveQual decision:** Proposed as the implementation direction for the 12-week project.
+- **Open decision:** Requires a later spike, hardware inventory, or team decision.
+
+## 3. Product boundary
+
+### 3.1 Problem statement
+
+A low-voltage embedded product may work when each subsystem is exercised separately and still fail under a rare combination of rail voltage, component states, workload, and timing. Exhaustively executing every combination on physical hardware may take too long.
+
+ActiveQual investigates whether adaptive test selection can find and characterize these failures using fewer physical experiments than fixed, random, grid, space-filling, and pairwise baselines under the same experiment budget.
+
+### 3.2 Twelve-week MVP
+
+The first implementation contains:
+
+- one ESP32-based device-under-test design;
+- at least three independently settable or switchable low-voltage rails;
+- at least four discrete workload or component states;
+- a bounded set of parameterized event sequences;
+- voltage, current, heartbeat/reset, workload, timing, and external OLED observations;
+- one disclosed seeded interaction fault with hidden parameters during search;
+- random, fixed/corner, space-filling, pairwise, and one adaptive planner;
+- failure confirmation and basic failure minimization;
+- a local Console, BFF Service, Backend Service, Agent Service, Controller Service, Adapter Service, and database using the selected stack;
+- deterministic software safety validation, local instrument limits, a watchdog, and a physical emergency cutoff.
+
+### 3.3 Stretch scope
+
+- A second DUT design or board revision.
+- A naturally occurring electrical interaction fault.
+- Five independently adjustable rails.
+- Camera-based display-content validation.
+- Remote deployment of the application control plane.
+
+### 3.4 Non-goals
+
+The MVP does not:
+
+- test arbitrary electronics without a DUT-specific fixture and test contract;
+- operate mains voltage or perform destructive voltage, clock, or electromagnetic glitching;
+- derive safe electrical limits autonomously from an LLM or the Internet;
+- use an LLM as the numerical planner, failure oracle, or safety authority;
+- certify the complete operating envelope after a finite set of passing tests;
+- replace laboratory safety review or accredited product qualification;
+- support unattended operation outside a supervised laboratory;
+- require production integration with existing customer data or workflows.
+
+## 4. Architecture principles
+
+1. **Use the selected stack for application software.** APIs use protobuf and gRPC; backend, agent, controller, and adapter services use Kotlin/JVM; persistence uses JPA and Liquibase; the frontend uses React, Next.js, TypeScript, and the existing design-system conventions.
+2. **Keep the DUT separate from the test controller.** A DUT crash must not prevent ActiveQual from measuring the crash or removing power.
+3. **Keep safety outside the adaptive planner.** The planner proposes candidates. It cannot approve or execute them.
+4. **Validate twice.** The Backend Service validates a proposed episode before making it available, and the Controller Service validates it again immediately before execution.
+5. **Use measured values as evidence.** Requested voltage and measured voltage are stored separately. An experiment with invalid or missing measurements is not silently counted as a DUT failure.
+6. **Persist before physical execution.** Every episode receives a durable identity, approved contract version, and execution lease before hardware changes begin.
+7. **Pull work from the bench.** The Controller Service requests the next approved episode from the Backend Service. The application does not initiate an inbound connection to a laboratory laptop.
+8. **Report bounded evidence.** A failure is a counterexample to a requirement. Passing samples mean only that no counterexample was found within the executed budget.
+
+## 5. System context
+
+```mermaid
+flowchart LR
+    Researcher[Researcher or Student Team] -->|configures, runs and evaluates campaigns| ActiveQual[ActiveQual System]
+    Faculty[Faculty Evaluator] -->|reviews evidence and safety status| ActiveQual
+
+    ActiveQual -->|commands and read-back| Instruments[Programmable Rails and Measurement Instruments]
+    ActiveQual -->|workloads, heartbeat and reset telemetry| DUT[ESP32 Device Under Test]
+    ActiveQual -->|power cutoff request| Interlock[Watchdog, Interlock and E-stop]
+    Interlock -->|physically disables outputs| Instruments
+
+    Contract[Reviewed DUT Test Contract] --> ActiveQual
+    Calibration[Calibration and Fixture Configuration] --> ActiveQual
+    ActiveQual --> Evidence[Campaign Evidence Bundle]
+```
+
+### 5.1 Human actors
+
+| Actor | Responsibilities | Authority |
+|---|---|---|
+| Researcher | Selects reviewed contracts, confirms the physical setup, arms campaigns, monitors execution, handles lockout, and defines benchmarks, budgets, planners, seeds, metrics, and evaluation protocols | May arm, pause, abort, and disarm; may configure legal research campaigns; may never override hard limits or directly energize hardware through the planner |
+| Faculty evaluator | Reviews the declared space, observes the demo, and examines evidence and limitations | Read-only during normal execution; may request that the researcher abort |
+| Hardware/safety owner | Reviews fixture wiring, calibration, autonomous bounds, cutoff behavior, and recovery procedure | Approves the hardware/contract tuple before it can be armed |
+
+### 5.2 External systems
+
+| External system | Information sent by ActiveQual | Information returned to ActiveQual |
+|---|---|---|
+| Programmable rails | Setpoint, enable state, current limit, slew or sequence command | Measured voltage/current, output status, trip status, instrument errors |
+| Measurement instruments | Arm, trigger, capture configuration | Waveforms, measurements, timestamps, quality indicators |
+| DUT firmware | Reset and named bounded workload commands | Heartbeat, boot/reset reason, event markers, application acknowledgements |
+| Optical observer | Capture/measurement command | Expected-pattern visibility or image-derived score |
+| Hardware interlock | Arm and controlled shutdown request | E-stop, watchdog, temperature/current trip, cutoff state |
+
+## 6. Service architecture
+
+**Verified stack pattern:** The current repository uses separate `api`, `model`, optional `storage`, and `service` modules. The frontend uses Next.js, React, and TypeScript, calls a dedicated BFF, and uses protobuf/gRPC contracts. Backend service classes use coroutine gRPC dispatch and delegate business behavior to focused implementations. The repository also contains a separate Kotlin worker process and JPA/Liquibase persistence.
+
+**ActiveQual decision:** Organize ActiveQual into six named application layers: Console, BFF Service, Backend Service, Agent Service, Controller Service, and Adapter Service. These are responsibility boundaries; they do not all require separate deployment processes in the 12-week MVP.
+
+```mermaid
+flowchart TB
+    subgraph Browser[Researcher Browser]
+        UI[ActiveQual Web UI]
+    end
+
+    subgraph ApplicationHost[Local Application Processes]
+        BFF[BFF Service]
+        Backend[Backend Service]
+        Agent[Agent Service]
+        Store[(PostgreSQL)]
+        TraceStore[(Local Trace Storage)]
+    end
+
+    subgraph BenchHost[Laboratory Bench Process]
+        ControllerService[Controller Service]
+        BenchSafety[Bench-Side Safety Validator]
+        Adapter[Adapter Service]
+    end
+
+    subgraph Fixture[Physical Test Fixture]
+        ControllerMCU[Test Controller MCU]
+        Supplies[Programmable Rails and Switches]
+        Sensors[Voltage, Current, Temperature and Optical Sensors]
+        Interlock[Watchdog, E-stop and Power Cutoff]
+        DUT[ESP32 DUT]
+    end
+
+    UI -->|protobuf RPC through generated client| BFF
+    BFF -->|authenticated gRPC| Backend
+    Backend -->|campaign state and approved episodes| Store
+    Backend -->|raw-trace references| TraceStore
+    Agent -->|read campaign history and submit proposals| Backend
+    ControllerService -->|claim approved episode lease| Backend
+    ControllerService -->|submit observations and outcome| Backend
+    ControllerService --> BenchSafety
+    BenchSafety -->|validated execution plan| Adapter
+    Adapter <--> ControllerMCU
+    Adapter <--> Supplies
+    Adapter <--> Sensors
+    ControllerMCU <--> DUT
+    Supplies --> DUT
+    Sensors --> DUT
+    Interlock -. disconnects .-> Supplies
+    ControllerMCU -->|watchdog heartbeat| Interlock
+```
+
+### 6.1 Why these services exist
+
+```text
+Console
+  -> BFF Service
+  -> Backend Service
+       -> Agent Service proposes the next experiment
+       -> Controller Service claims and executes an approved experiment
+            -> Adapter Service translates generic actions for each instrument
+                 -> Test-controller MCU, supplies, sensors and DUT
+```
+
+The **Controller Service is required as a logical component** because the Adapter Service alone should not own the experiment sequence. An adapter knows how to perform one instrument-specific action, such as setting a supply voltage or reading a current measurement. The Controller Service knows the complete episode procedure: reset, configure, settle, stimulate, observe, shut down, recover, and submit evidence.
+
+For the MVP, the Controller Service and Adapter Service run in the same local Kotlin/JVM bench process. Keeping them in one process avoids an unnecessary network boundary while preserving separate interfaces and responsibilities. They can be separated later if multiple benches or remote instruments require it.
+
+### 6.2 Proposed repository/module map
+
+The exact Gradle inclusion paths will be confirmed during the implementation bootstrap. The intended ownership is:
+
+```text
+activequal/
+├── model/                 Reusable protobuf domain entities
+├── api/                   Backend gRPC service contract
+├── storage/               JPA entities, repositories and Liquibase changes
+├── service/               Authorization, contract validation and campaign APIs
+├── agent/
+│   └── service/           Baselines, adaptive planning and minimization scheduling
+├── controller/
+│   └── service/           Local episode state machine, leases and safety coordination
+├── adapter/
+│   └── service/           Instrument-neutral interfaces and device-specific drivers
+├── console/
+│   ├── bff/api/           Browser-facing protobuf contract
+│   ├── bff/service/       Session-aware BFF and backend forwarding
+│   └── ui/                Next.js, React, TypeScript and shared UI components
+└── firmware/
+    ├── test-controller/   Real-time controller firmware
+    └── dut/               ESP32 workloads, telemetry and seeded benchmarks
+```
+
+The firmware modules are the unavoidable exception to Kotlin/JVM application code because they run directly on microcontrollers. They still communicate through versioned, bounded message contracts.
+
+### 6.3 Service responsibilities
+
+| Service | Owns | Must not own |
+|---|---|---|
+| Console | Contract review, campaign controls, live status, maps, and evidence presentation | Instrument commands, safety decisions, planner internals |
+| BFF Service | Browser session context, user-facing request shaping, forwarding, and UI-safe error translation | Physical execution, campaign scheduling, durable scientific data |
+| Backend Service | Authorization, durable campaign state, contract/version management, episode leases, result acceptance | USB/serial drivers, sub-millisecond timing, direct rail control |
+| Agent Service | Baseline/adaptive proposals, budget accounting, failure confirmation, and minimization scheduling | Approval of its own proposals, instrument access, final safety authority |
+| Controller Service | Fixture checks, final candidate validation, episode state machine, lease execution, safe recovery, and result submission | Inventing tests, widening limits, or containing vendor-specific instrument commands |
+| Adapter Service | Translation between generic rail/measurement operations and vendor-specific USB, serial, LAN, or instrument APIs | Selecting experiments, campaign state, safety-policy ownership, or deciding the episode sequence |
+| Test-controller firmware | Deterministic event timing, watchdog heartbeat, immediate local shutdown signalling | Research planning, long-term persistence, UI logic |
+| Hardware interlock | Independent cutoff on E-stop/watchdog/protection trip | Functional pass/fail decisions or search logic |
+| DUT firmware | Named workloads, heartbeat, reset reason, event markers, disclosed seeded fault implementation | Safety enforcement or authoritative verdicts about itself |
+
+### 6.4 Service versus deployment boundary
+
+In this document, “service” describes a component with a clear interface and responsibility. It does not automatically mean a separate server, container, or network call.
+
+| Deployment process | Components inside it for the MVP |
+|---|---|
+| Web process | Console |
+| BFF process | BFF Service |
+| Backend process | Backend Service |
+| Agent worker process | Agent Service |
+| Local bench process | Controller Service, bench-side safety validator, and Adapter Service |
+| Microcontroller firmware | Test-controller firmware |
+
+## 7. Control-plane and bench-plane boundary
+
+The most important system boundary separates the **control plane** from the **bench plane**.
+
+- The **control plane** contains the Console, BFF Service, Backend Service, Agent Service, persistence, planners, and reports. It decides what legal experiment should happen next and records the campaign.
+- The **bench plane** contains the Controller Service, Adapter Service, test-controller MCU, instruments, sensors, interlock, and DUT. It decides whether an already approved experiment can be executed on the currently connected fixture and performs the physical operation.
+
+The control plane can request an experiment such as:
+
+```text
+OLED rail = 3.25 V
+Red LED = ON
+Green LED = OFF
+Workload = OLED_REFRESH
+Observe for 500 ms
+```
+
+The bench plane returns evidence such as:
+
+```text
+requested OLED rail = 3.25 V
+measured OLED rail = 3.247 V
+peak current = 41 mA
+heartbeat = healthy
+OLED optical pattern = absent
+instrument quality = valid
+outcome = DUT_FAILURE
+```
+
+The Agent Service learns from measured conditions and the classified outcome. It does not receive hidden seeded-fault thresholds or a private firmware failure label.
+
+## 8. Primary end-to-end flow
+
+```mermaid
+sequenceDiagram
+    actor Researcher
+    participant UI as Web UI
+    participant BFF as BFF Service
+    participant API as Backend Service
+    participant W as Agent Service
+    participant A as Controller Service
+    participant H as Fixture and DUT
+
+    Researcher->>UI: Start reviewed campaign
+    UI->>BFF: StartCampaign
+    BFF->>API: StartCampaign with authenticated project and user
+    API->>API: Verify contract, fixture, calibration and arm state
+    API-->>UI: Campaign ready
+
+    W->>API: Claim campaign planning work
+    API-->>W: History, legal contract and remaining budget
+    W->>W: Propose next candidate
+    W->>API: Submit candidate
+    API->>API: Deterministic safety validation
+    API-->>W: Approved episode persisted
+
+    A->>API: Claim next approved episode
+    API-->>A: Episode lease and approved contract hash
+    A->>A: Check fixture identity and validate again
+    A->>H: Apply safe initial state and execute
+    H-->>A: Measurements, telemetry and protection state
+    A->>H: Return to shutdown state
+    A->>API: Submit measured result and trace references
+    API->>API: Persist result and update campaign state
+    API-->>BFF: Campaign status available
+    BFF-->>UI: Status and evidence
+```
+
+### 8.1 Why the Controller Service pulls work
+
+The pull model means the backend never needs to open a connection into the researcher's laptop or laboratory network. It also gives each physical episode a durable lease:
+
+- only one Controller Service instance may own an episode at a time;
+- an expired lease can be investigated before retry;
+- a backend or UI restart does not erase the episode record;
+- disconnecting the backend does not grant the agent permission to invent more work;
+- the agent can move the fixture to its safe shutdown state when communication is lost.
+
+This is conceptually aligned with the existing claim-and-worker pattern, but ActiveQual needs its own physical-execution lease semantics.
+
+## 9. Authority and trust boundaries
+
+| Component | Propose experiment | Approve against contract | Energize hardware | Classify functional result | Emergency stop |
+|---|---:|---:|---:|---:|---:|
+| Optional LLM assistant | Suggestions only | No | No | No | No |
+| Campaign planner | Yes | No | No | No | No |
+| Backend safety validator | No | Yes | No | No | Requests abort |
+| Bench safety validator | No | Yes again | Authorizes driver call | No | Yes |
+| Instrument/controller limits | No | Enforces local bounds | Yes | No | Yes |
+| Oracle | No | No | No | Yes, using reviewed rules | Requests abort |
+| Hardware interlock | No | Not applicable | Disconnect only | No | Yes |
+| Researcher | Selects campaign | Arms reviewed tuple | Indirectly | Reviews evidence | Yes |
+
+No single software component is sufficient to make an unsafe candidate physically execute. This reduces risk but is not a claim that hardware accidents are impossible. Protection latency, overshoot, wiring faults, and component failures must be measured and handled in the hardware and safety designs.
+
+## 10. Identity and scope
+
+**Verified stack pattern:** Public API contracts use `project_id`; database entities use `company_id` where required by existing storage conventions. Browser calls pass through a session-aware BFF, while backend services enforce project-scoped authorization.
+
+**ActiveQual decision:** Every durable ActiveQual entity is project-scoped. The BFF supplies authenticated caller context, and the backend verifies access for every campaign, contract, fixture, episode, and evidence read.
+
+The Controller Service is not a human browser session. It requires a separately provisioned machine identity bound to:
+
+- one application project;
+- one registered fixture identity;
+- allowed RPCs for claiming work, heartbeating, and submitting results;
+- a revocable credential;
+- an optional expiry time for a demonstration deployment.
+
+**Open decision:** Select the existing machine-to-service authentication mechanism during the API/security HLD. Do not reuse a human session cookie or store a user credential in the bench process.
+
+## 11. Data ownership
+
+The backend database is authoritative for:
+
+- test-contract versions and approval state;
+- fixture registrations and compatible firmware/calibration hashes;
+- campaigns, budgets, planner configuration, and random seeds;
+- episode proposals, safety decisions, leases, state, and outcomes;
+- reproduction and minimization relationships;
+- audit records and researcher actions;
+- references and checksums for raw evidence.
+
+Large waveforms, images, and trace files are stored outside normal relational rows. The database stores their content hash, size, media type, capture metadata, and location.
+
+The Controller Service may keep a local recovery spool while disconnected. Locally spooled results are pending evidence until the backend accepts them and verifies episode identity, lease, contract/fixture hashes, and checksums.
+
+## 12. Failure and disconnect behavior
+
+| Failure | Required high-level behavior |
+|---|---|
+| Browser closes | Campaign continues only if already armed and allowed by the researcher policy; UI can reconnect and read durable state |
+| BFF restarts | No physical authority is lost or gained; browser retries status reads |
+| Backend unavailable | Controller Service finishes only the currently leased bounded episode if safe, shuts down outputs, spools evidence, and claims no new work |
+| Agent Service fails | No new episode is proposed; current persisted episode state remains inspectable |
+| Controller Service crashes | Test-controller watchdog/interlock moves outputs to shutdown; episode becomes indeterminate until lease reconciliation |
+| Instrument disconnects | Abort the episode, remove power where possible, and classify it as an invalid experiment or safety abort rather than DUT failure |
+| DUT stops heartbeating | Continue independent measurements long enough for the reviewed oracle, then shut down and classify using the measured evidence |
+| E-stop or protection trip | Cut power independently, enter lockout, preserve available traces, and require physical review before re-arming |
+| Result upload fails | Keep checksummed evidence in the local spool and retry submission idempotently; do not rerun automatically |
+
+## 13. Deployment boundary for the MVP
+
+All application processes run on one laboratory laptop or workstation for the 12-week proof of concept:
+
+```text
+Browser
+  -> ActiveQual Next.js web UI
+  -> ActiveQual Kotlin BFF
+  -> ActiveQual Kotlin backend
+  -> PostgreSQL + local trace storage
+  -> ActiveQual Agent Service worker
+  -> ActiveQual Controller and Adapter bench process
+  -> USB/LAN instruments + test-controller MCU + DUT
+```
+
+Processes remain separate where the deployment table specifies a boundary, even when they run on one machine. This allows the Controller Service, Adapter Service, and hardware to be tested independently. Production Kubernetes deployment, multi-bench scheduling, and Internet-accessible control are outside the MVP.
+
+## 14. Key high-level requirements
+
+| ID | Requirement |
+|---|---|
+| CTX-01 | Every physical episode references an immutable contract version, fixture identity, firmware identity, planner configuration, and calibration record |
+| CTX-02 | Only reviewed and armed campaigns may produce claimable physical episodes |
+| CTX-03 | Planner output cannot reach an instrument without backend and bench-side deterministic validation |
+| CTX-04 | The Controller Service cannot widen contract limits or create experiments |
+| CTX-05 | The test controller and hardware cutoff remain able to shut down if application processes freeze or disconnect |
+| CTX-06 | Requested and measured conditions are stored separately |
+| CTX-07 | Outcomes distinguish `PASS`, `DUT_FAILURE`, `INVALID_EXPERIMENT`, and `SAFETY_ABORT` |
+| CTX-08 | Large evidence files are checksummed and traceable to exactly one episode |
+| CTX-09 | Baseline and adaptive planners execute through the same safety and bench path |
+| CTX-10 | The UI displays failures, safety aborts, invalid experiments, budget usage, and uncertainty without hiding execution errors |
+| CTX-11 | Loss of backend connectivity prevents new work and causes a bounded move to the safe shutdown state |
+| CTX-12 | A passing campaign is reported as “no counterexample found within this campaign budget” |
+
+## 15. Decisions made in this document
+
+1. The implementation uses the selected module and technology conventions.
+2. ActiveQual is a bounded project rather than physical-test logic embedded in an unrelated existing service.
+3. The 12-week MVP deploys locally on one laboratory workstation.
+4. The control plane and bench plane communicate through protobuf/gRPC.
+5. The Controller Service is part of a local Kotlin/JVM bench process and pulls approved work using an episode lease.
+6. Microcontroller firmware is the only required non-JVM execution environment.
+7. Safety validation occurs before persistence as approved work and again at the bench.
+8. PostgreSQL owns campaign metadata; large evidence uses checksummed trace storage.
+9. The first DUT, three rails, bounded event templates, and one adaptive method define the implementation baseline.
+
+## 16. Open decisions and follow-up documents
+
+| Decision | Recommended direction | Resolved in |
+|---|---|---|
+| Exact programmable supply and measurement instruments | Choose from the actual laboratory inventory before designing adapters | HLD 02: Hardware Architecture |
+| ESP32 board, OLED, sensor, storage, and rail partition | Select parts whose legal ranges and power sequencing can be independently controlled | HLD 02: Hardware Architecture |
+| Test-controller MCU | RP2040 or STM32 with hardware watchdog and deterministic timers | HLD 02: Hardware Architecture |
+| Episode lifecycle and lease transitions | Explicit persisted state machine with idempotent result submission | HLD 03: Episode Execution and Safety State Machine |
+| Test-contract protobuf structure | Typed variables, units, constraints, transitions, oracle rules, and budget | HLD 04: Test Contract and Domain Model |
+| Bench-agent RPC surface | Claim, heartbeat, renew, submit, abort acknowledgement, and fixture health | HLD 05: APIs and Instrumentation Protocols |
+| First adaptive method | Mixed-domain active learner using continuous robustness plus failure probability | HLD 06: Planner and Evaluation Design |
+| Machine authentication | Reuse a verified service identity suitable for the local Controller Service | HLD 07: Security and Deployment |
+| Trace storage mechanism | Local filesystem for MVP behind an interface; object storage later | HLD 08: Persistence and Observability |
+
+## 17. Acceptance criteria for this HLD
+
+This design is ready for the next HLD when the team agrees on:
+
+- the 12-week MVP and stretch boundary;
+- ActiveQual as a standalone project using the selected stack;
+- the control-plane versus bench-plane split;
+- the local deployment assumption;
+- the lease-based bench pull model;
+- component authority, especially that the planner cannot approve or execute hardware commands;
+- the first DUT category and minimum three-rail fixture.
+
+## 18. Implementation evidence used
+
+The design was checked against the current implementation patterns for:
+
+- standard `api`, `model`, `storage`, and `service` module boundaries;
+- Kotlin DSL builds and centrally managed dependencies;
+- protobuf domain models and gRPC service contracts;
+- coroutine gRPC service dispatch and focused business-logic implementations;
+- a separately deployed Kotlin worker using claim-and-scan patterns;
+- a dedicated BFF with generated backend coroutine stubs;
+- Next.js, React, TypeScript, generated protobuf clients, and Vitest;
+- shared design tokens, layout primitives, and theme components;
+- JPA persistence and Liquibase-managed schema changes.
+
+The inspected working checkout was on an older feature branch, so this draft used the current upstream branch directly without modifying or rebasing the checkout.
