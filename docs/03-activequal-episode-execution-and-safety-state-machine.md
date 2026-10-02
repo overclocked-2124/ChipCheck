@@ -1,10 +1,10 @@
 # ActiveQual HLD 03: Episode Execution and Safety State Machine
 
-**Project:** ActiveQual: AI-Driven Adaptive Physical Testing for Embedded Systems  
-**Document type:** High-Level Design  
-**Status:** Initial draft for team review  
-**Target delivery:** 12-week proof of concept  
-**Depends on:** HLD 01 — System Context and Platform Boundaries; HLD 02 — Hardware Architecture  
+**Project:** ActiveQual: AI-Driven Adaptive Physical Testing for Embedded Systems<br>
+**Document type:** High-Level Design<br>
+**Status:** Initial draft for team review<br>
+**Target delivery:** 12-week proof of concept<br>
+**Depends on:** HLD 01 — System Context and Platform Boundaries; HLD 02 — Hardware Architecture
 
 ## 1. Purpose
 
@@ -20,7 +20,7 @@ It specifies:
 - normal shutdown and emergency cutoff behavior;
 - result classification;
 - retries, recovery, and idempotency;
-- responsibilities of the Backend, Agent, Controller, and Adapter Services.
+- responsibilities of the Backend, Agent, Decision, Controller, and Adapter Services.
 
 The goal is to make every physical action explainable and recoverable. At any moment, the system should be able to answer:
 
@@ -36,7 +36,8 @@ The goal is to make every physical action explainable and recoverable. At any mo
 | Term | Meaning |
 |---|---|
 | Campaign | A complete budgeted research run using one contract, fixture, planner, seed, and stopping policy |
-| Candidate | An experiment proposed by the Agent Service before safety approval |
+| Candidate | An experiment selected by the Decision Service, submitted by the Agent Service, and awaiting safety approval |
+| Decision context | Campaign history, approved legal domain, planner configuration, and remaining budget supplied by Agent for one selection request |
 | Episode | One durable reset-to-reset physical experiment |
 | Attempt | One effort to physically execute an episode; an episode is not silently retried |
 | Lease | Time-bounded ownership allowing one Controller Service instance to execute one approved episode |
@@ -57,7 +58,7 @@ The goal is to make every physical action explainable and recoverable. At any mo
 6. **Hardware protection does not wait for software.** E-stop, watchdog, current, and temperature protection can open the cutoff directly.
 7. **Unknown is recorded as unknown.** Missing evidence is not converted into a DUT failure or pass.
 8. **Physical retries are explicit experiments.** A repeated run receives a new episode ID linked to the original.
-9. **The same runner executes every planner.** Manual, fixed, random, pairwise, space-filling, and adaptive candidates use the same states and safety checks.
+9. **The same runner executes every planner.** Manual, fixed, random, pairwise, space-filling, and adaptive candidates selected through Decision use the same states and safety checks.
 10. **Every transition has a reason.** State changes are recorded as append-only events with actor, timestamp, and reason.
 
 ## 4. Responsibility boundaries
@@ -67,7 +68,8 @@ The goal is to make every physical action explainable and recoverable. At any mo
 | Console | Requests campaign actions and displays state; does not directly change hardware state |
 | BFF Service | Adds trusted researcher/project context and forwards valid user actions |
 | Backend Service | Owns authoritative campaign, candidate, episode, lease, and outcome records |
-| Agent Service | Proposes candidates and schedules confirmation/minimization work |
+| Agent Service | Owns campaign planning lifecycle, obtains history/domain/configuration/budget from Backend, supplies Decision context, submits returned candidates, accounts for budget, and schedules confirmation/minimization work |
+| Decision Service | Implements the common planner interface and candidate-selection algorithms; returns a candidate and rationale for supplied context |
 | Backend Safety Validator | Evaluates proposed candidates against the approved test contract |
 | Controller Service | Claims one episode, runs the physical state machine, and submits evidence |
 | Bench-Side Safety Validator | Rechecks the episode and current fixture state immediately before execution |
@@ -92,7 +94,7 @@ The lifecycle tells us that ActiveQual safely completed and stored the experimen
 
 The MVP uses these outcomes:
 
-| Outcome | Meaning | May update adaptive model? |
+| Outcome | Meaning | May update Decision Service model? |
 |---|---|---:|
 | `PASS` | All required observations were valid and requirements passed | Yes |
 | `DUT_FAILURE` | Valid independent evidence shows a requirement violation | Yes |
@@ -108,7 +110,7 @@ stateDiagram-v2
     [*] --> DRAFT
     DRAFT --> VALIDATING: Submit configuration
     VALIDATING --> DRAFT: Validation failed
-    VALIDATING --> READY: Contract, fixture and planner valid
+    VALIDATING --> READY: Contract, fixture and Decision planner config valid
     READY --> ARMED: Researcher arms and bench is healthy
     ARMED --> RUNNING: Start campaign
     RUNNING --> PAUSING: Pause requested
@@ -131,10 +133,10 @@ stateDiagram-v2
 | State | Meaning | New physical episode allowed? |
 |---|---|---:|
 | `DRAFT` | Configuration is editable and not approved for execution | No |
-| `VALIDATING` | Backend checks contract, fixture, planner, budget, and compatibility | No |
+| `VALIDATING` | Backend checks contract, fixture, Decision planner configuration, budget, and compatibility | No |
 | `READY` | Configuration is valid but the physical bench is not armed | No |
 | `ARMED` | Researcher confirmed the fixture and the bench reports healthy | No, until campaign start |
-| `RUNNING` | Agent Service may propose and Controller Service may claim episodes | Yes |
+| `RUNNING` | Agent Service may request candidate selection from Decision and submit candidates; Controller Service may claim approved episodes | Yes |
 | `PAUSING` | No new lease is issued; active episode must reach shutdown | No |
 | `PAUSED` | Campaign state is retained but no physical work is available | No |
 | `ABORTING` | Active work is being stopped and the bench is moving to shutdown | No |
@@ -161,11 +163,11 @@ Changing the contract, fixture, firmware, calibration, planner configuration, or
 
 ## 7. Candidate state machine
 
-Candidates are planner suggestions. They are not yet executable episodes.
+Candidates are Decision Service selections returned to Agent. Agent submits them to Backend; they are not yet executable episodes.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PROPOSED
+    [*] --> PROPOSED: Agent submits Decision candidate and rationale
     PROPOSED --> VALIDATING: Backend receives candidate
     VALIDATING --> REJECTED: Contract or safety rule fails
     VALIDATING --> APPROVED: All deterministic checks pass
@@ -176,7 +178,7 @@ stateDiagram-v2
 
 ### 7.1 Candidate rejection
 
-Rejection does not consume a physical-experiment budget because the hardware was not touched. It does consume planner effort and is recorded for diagnostics.
+Rejection does not consume a physical-experiment budget because the hardware was not touched. It does consume planner effort and is recorded with the candidate rationale for diagnostics.
 
 The Backend Service returns a structured reason such as:
 
@@ -286,11 +288,20 @@ The researcher or reconciliation logic must establish the observed bench state a
 ```mermaid
 sequenceDiagram
     participant B as Backend Service
+    participant G as Agent Service
+    participant D as Decision Service
     participant C as Controller Service
     participant S as Bench Safety Validator
     participant A as Adapter Service
     participant M as Test-Controller MCU
     participant H as Hardware and DUT
+
+    G->>B: Claim planning work and read campaign context
+    B-->>G: History, approved legal domain, config and remaining budget
+    G->>D: Select candidate(context)
+    D-->>G: Candidate and rationale
+    G->>B: Submit candidate proposal
+    B->>B: Deterministic safety validation and persistence
 
     C->>B: ClaimNextEpisode(fixture)
     B-->>C: Episode lease, candidate, contract hash
@@ -491,6 +502,7 @@ This preserves scientific accounting and prevents an unseen first attempt from b
 | Failure point | Physical assumption | Recovery |
 |---|---|---|
 | Agent Service fails before proposal | No episode exists | Restart Agent; campaign remains running but idle |
+| Decision Service is unavailable or returns no candidate | No proposal is submitted | Keep campaign state and budget authoritative in Backend; resume planning after Decision is available |
 | Backend fails before lease | No physical owner | Restart Backend and expose the existing available episode |
 | Backend fails during a leased episode | Controller may be active | Controller completes only its bounded lease, shuts down, and spools evidence |
 | Controller fails before enabling rails | Shutdown expected | Verify instrument read-back before reconciling |
@@ -532,7 +544,7 @@ The MVP allows:
 
 - one active campaign per physical fixture;
 - one leased or executing episode per fixture;
-- one Agent Service planning step per campaign;
+- one Agent Service planning lifecycle step per campaign, including at most one outstanding Decision Service selection request;
 - multiple researchers viewing the campaign;
 - only one accepted state-changing researcher action for a given version.
 
@@ -587,7 +599,7 @@ Errors cannot appear only in logs. A researcher must be able to understand why a
 - conflicting result hashes are rejected;
 - pause prevents new leases;
 - physical retry creates a linked new episode;
-- `INVALID_EXPERIMENT` does not update the functional adaptive model;
+- `INVALID_EXPERIMENT` does not update the functional Decision Service model;
 - all transitions create audit events.
 
 ### 23.2 Simulator tests
@@ -622,15 +634,16 @@ Errors cannot appear only in logs. A researcher must be able to understand why a
 ## 24. Decisions made in this document
 
 1. Campaigns, candidates, episode lifecycle, and scientific outcomes use separate state models.
-2. The Backend Service owns authoritative durable state.
-3. The Controller Service owns the local physical state machine.
-4. Physical ownership uses a time-bounded, fixture-bound episode lease.
-5. Expired or ambiguous leases are reconciled before any physical retry.
-6. Every episode ends through confirmed shutdown or emergency cutoff.
-7. Safety abort, invalid experiment, DUT failure, and pass are distinct outcomes.
-8. Physical retries are new linked episodes and are never silent.
-9. The current state is stored for efficient reads, and every transition is also appended to an audit history.
-10. One fixture executes at most one episode at a time in the MVP.
+2. Decision selects candidates and returns rationale; Agent owns campaign orchestration, budget accounting, proposal submission, confirmation, and minimization scheduling. Decision has no persistence, safety approval, or hardware authority.
+3. The Backend Service owns authoritative durable state.
+4. The Controller Service owns the local physical state machine.
+5. Physical ownership uses a time-bounded, fixture-bound episode lease.
+6. Expired or ambiguous leases are reconciled before any physical retry.
+7. Every episode ends through confirmed shutdown or emergency cutoff.
+8. Safety abort, invalid experiment, DUT failure, and pass are distinct outcomes.
+9. Physical retries are new linked episodes and are never silent.
+10. The current state is stored for efficient reads, and every transition is also appended to an audit history.
+11. One fixture executes at most one episode at a time in the MVP.
 
 ## 25. Follow-up decisions
 
