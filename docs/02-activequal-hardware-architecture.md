@@ -50,6 +50,8 @@ The hardware must:
 
 ## 4. Physical architecture
 
+Candidate-selection algorithms run in the Decision Service, which returns a candidate and rationale to the Agent Service. Agent submits that candidate to Backend; only a Backend-approved episode is available to the Controller Service. The Decision Service and Agent Service have no direct instrument, test-controller, or DUT connection. The physical architecture below begins at the Controller Service boundary and contains the independent bench-side checks and hardware protections.
+
 ```mermaid
 flowchart LR
     subgraph Host[Laboratory Workstation]
@@ -380,13 +382,13 @@ Every workload returns:
 - error code;
 - relevant result value.
 
-The seeded failure may change the OLED behavior under a hidden combination, but the firmware must not emit “seeded fault active” to the Agent Service, Controller Service, or oracle during an evaluation campaign.
+The seeded failure may change the OLED behavior under a hidden combination, but the firmware must not emit “seeded fault active” to the Agent Service, Decision Service, Controller Service, or oracle during an evaluation campaign.
 
 ## 13. Physical safety chain
 
 ```mermaid
 flowchart LR
-    Candidate[Approved Episode] --> BenchCheck[Bench-Side Safety Validation]
+    BackendApproved[Backend-approved episode] --> BenchCheck[Bench-Side Safety Validation]
     BenchCheck --> InstrumentLimit[Programmed Instrument Limits]
     InstrumentLimit --> Output[Rail Output]
 
