@@ -51,7 +51,7 @@ The first implementation contains:
 - one disclosed seeded interaction fault with hidden parameters during search;
 - random, fixed/corner, space-filling, pairwise, and one adaptive planner;
 - failure confirmation and basic failure minimization;
-- a local Console, BFF Service, Backend Service, Agent Service, Controller Service, Adapter Service, and database using the selected stack;
+- a local Console, BFF Service, Backend Service, Agent Service, Decision Service, Controller Service, Adapter Service, and database using the selected stack;
 - deterministic software safety validation, local instrument limits, a watchdog, and a physical emergency cutoff.
 
 ### 3.3 Stretch scope
@@ -77,9 +77,9 @@ The MVP does not:
 
 ## 4. Architecture principles
 
-1. **Use the selected stack for application software.** APIs use protobuf and gRPC; backend, agent, controller, and adapter services use Kotlin/JVM; persistence uses JPA and Liquibase; the frontend uses React, Next.js, TypeScript, and the existing design-system conventions.
+1. **Use the selected stack for application software.** APIs use protobuf and gRPC; backend, agent, decision, controller, and adapter services use Kotlin/JVM; persistence uses JPA and Liquibase; the frontend uses React, Next.js, TypeScript, and the existing design-system conventions.
 2. **Keep the DUT separate from the test controller.** A DUT crash must not prevent ActiveQual from measuring the crash or removing power.
-3. **Keep safety outside the adaptive planner.** The planner proposes candidates. It cannot approve or execute them.
+3. **Keep safety outside candidate selection.** The Decision Service selects candidates but cannot approve or execute them.
 4. **Validate twice.** The Backend Service validates a proposed episode before making it available, and the Controller Service validates it again immediately before execution.
 5. **Use measured values as evidence.** Requested voltage and measured voltage are stored separately. An experiment with invalid or missing measurements is not silently counted as a DUT failure.
 6. **Persist before physical execution.** Every episode receives a durable identity, approved contract version, and execution lease before hardware changes begin.
@@ -125,7 +125,7 @@ flowchart LR
 
 **Verified stack pattern:** The current repository uses separate `api`, `model`, optional `storage`, and `service` modules. The frontend uses Next.js, React, and TypeScript, calls a dedicated BFF, and uses protobuf/gRPC contracts. Backend service classes use coroutine gRPC dispatch and delegate business behavior to focused implementations. The repository also contains a separate Kotlin worker process and JPA/Liquibase persistence.
 
-**ActiveQual decision:** Organize ActiveQual into six named application layers: Console, BFF Service, Backend Service, Agent Service, Controller Service, and Adapter Service. These are responsibility boundaries; they do not all require separate deployment processes in the 12-week MVP.
+**ActiveQual decision:** Organize ActiveQual into seven named application layers: Console, BFF Service, Backend Service, Agent Service, Decision Service, Controller Service, and Adapter Service. These are responsibility boundaries; they do not all require separate deployment processes in the 12-week MVP. The Decision Service owns algorithm implementations and the common planner interface. The Agent Service owns campaign orchestration and invokes the Decision Service with the campaign context it obtains from Backend.
 
 ```mermaid
 flowchart TB
@@ -137,6 +137,7 @@ flowchart TB
         BFF[BFF Service]
         Backend[Backend Service]
         Agent[Agent Service]
+        Decision[Decision Service]
         Store[(PostgreSQL)]
         TraceStore[(Local Trace Storage)]
     end
@@ -159,7 +160,10 @@ flowchart TB
     BFF -->|authenticated gRPC| Backend
     Backend -->|campaign state and approved episodes| Store
     Backend -->|raw-trace references| TraceStore
-    Agent -->|read campaign history and submit proposals| Backend
+    Agent -->|read history, approved domain, config and remaining budget| Backend
+    Agent -->|selection request and campaign context| Decision
+    Decision -->|candidate and rationale| Agent
+    Agent -->|submit candidate proposal| Backend
     ControllerService -->|claim approved episode lease| Backend
     ControllerService -->|submit observations and outcome| Backend
     ControllerService --> BenchSafety
@@ -180,11 +184,14 @@ flowchart TB
 Console
   -> BFF Service
   -> Backend Service
-       -> Agent Service proposes the next experiment
+       -> Agent Service orchestrates planning and submits proposals
+            -> Decision Service selects a candidate and returns its rationale
        -> Controller Service claims and executes an approved experiment
             -> Adapter Service translates generic actions for each instrument
                  -> Test-controller MCU, supplies, sensors and DUT
 ```
+
+The Decision Service implements the common planner interface and candidate-selection algorithms. The Agent Service reads campaign history, the approved legal domain, planner configuration, and remaining budget from the Backend Service, then supplies that context for each selection request. The Decision Service returns a candidate and rationale; it does not submit or persist the candidate. Agent remains responsible for budget accounting, confirmation and failure-minimization scheduling, and all other campaign lifecycle work.
 
 The **Controller Service is required as a logical component** because the Adapter Service alone should not own the experiment sequence. An adapter knows how to perform one instrument-specific action, such as setting a supply voltage or reading a current measurement. The Controller Service knows the complete episode procedure: reset, configure, settle, stimulate, observe, shut down, recover, and submit evidence.
 
@@ -201,7 +208,9 @@ activequal/
 ├── storage/               JPA entities, repositories and Liquibase changes
 ├── service/               Authorization, contract validation and campaign APIs
 ├── agent/
-│   └── service/           Baselines, adaptive planning and minimization scheduling
+│   └── service/           Campaign orchestration, budget accounting, confirmation and minimization scheduling
+├── decision/
+│   └── service/           Common planner interface, baseline/adaptive algorithms, candidate selection and rationale
 ├── controller/
 │   └── service/           Local episode state machine, leases and safety coordination
 ├── adapter/
@@ -215,7 +224,7 @@ activequal/
     └── dut/               ESP32 workloads, telemetry and seeded benchmarks
 ```
 
-The firmware modules are the unavoidable exception to Kotlin/JVM application code because they run directly on microcontrollers. They still communicate through versioned, bounded message contracts.
+The Decision Service may initially be a logical module in the Agent worker process; a separate deployed process is not required for the MVP. It has no hardware/control access and no authority to persist campaign state or approve candidates. The firmware modules are the unavoidable exception to Kotlin/JVM application code because they run directly on microcontrollers. They still communicate through versioned, bounded message contracts.
 
 ### 6.3 Service responsibilities
 
@@ -224,7 +233,8 @@ The firmware modules are the unavoidable exception to Kotlin/JVM application cod
 | Console | Contract review, campaign controls, live status, maps, and evidence presentation | Instrument commands, safety decisions, planner internals |
 | BFF Service | Browser session context, user-facing request shaping, forwarding, and UI-safe error translation | Physical execution, campaign scheduling, durable scientific data |
 | Backend Service | Authorization, durable campaign state, contract/version management, episode leases, result acceptance | USB/serial drivers, sub-millisecond timing, direct rail control |
-| Agent Service | Baseline/adaptive proposals, budget accounting, failure confirmation, and minimization scheduling | Approval of its own proposals, instrument access, final safety authority |
+| Agent Service | Campaign planning lifecycle, loading history/domain/configuration/budget context, invoking Decision Service, submitting proposals for durable Backend recording, budget accounting, failure confirmation, and minimization scheduling | Implementing candidate-selection algorithms, approving proposals, instrument access, final safety authority |
+| Decision Service | Common planner interface and baseline/adaptive candidate-selection algorithms; returns a candidate with rationale for the supplied campaign context | Campaign lifecycle or budget ownership, persistence, contract/safety approval, instrument access, or hardware control |
 | Controller Service | Fixture checks, final candidate validation, episode state machine, lease execution, safe recovery, and result submission | Inventing tests, widening limits, or containing vendor-specific instrument commands |
 | Adapter Service | Translation between generic rail/measurement operations and vendor-specific USB, serial, LAN, or instrument APIs | Selecting experiments, campaign state, safety-policy ownership, or deciding the episode sequence |
 | Test-controller firmware | Deterministic event timing, watchdog heartbeat, immediate local shutdown signalling | Research planning, long-term persistence, UI logic |
@@ -240,7 +250,7 @@ In this document, “service” describes a component with a clear interface and
 | Web process | Console |
 | BFF process | BFF Service |
 | Backend process | Backend Service |
-| Agent worker process | Agent Service |
+| Agent worker process | Agent Service and, initially, the Decision Service module |
 | Local bench process | Controller Service, bench-side safety validator, and Adapter Service |
 | Microcontroller firmware | Test-controller firmware |
 
@@ -248,7 +258,7 @@ In this document, “service” describes a component with a clear interface and
 
 The most important system boundary separates the **control plane** from the **bench plane**.
 
-- The **control plane** contains the Console, BFF Service, Backend Service, Agent Service, persistence, planners, and reports. It decides what legal experiment should happen next and records the campaign.
+- The **control plane** contains the Console, BFF Service, Backend Service, Agent Service, Decision Service, persistence, and reports. The Decision Service selects a candidate; Agent orchestrates the campaign, submits proposals, and handles lifecycle work. Backend records authoritative campaign state and validates candidates.
 - The **bench plane** contains the Controller Service, Adapter Service, test-controller MCU, instruments, sensors, interlock, and DUT. It decides whether an already approved experiment can be executed on the currently connected fixture and performs the physical operation.
 
 The control plane can request an experiment such as:
@@ -273,7 +283,7 @@ instrument quality = valid
 outcome = DUT_FAILURE
 ```
 
-The Agent Service learns from measured conditions and the classified outcome. It does not receive hidden seeded-fault thresholds or a private firmware failure label.
+The Agent Service supplies measured history and classified outcomes to the Decision Service through its selection context. Neither Agent nor Decision receives hidden seeded-fault thresholds or a private firmware failure label.
 
 ## 8. Primary end-to-end flow
 
@@ -284,6 +294,7 @@ sequenceDiagram
     participant BFF as BFF Service
     participant API as Backend Service
     participant W as Agent Service
+    participant D as Decision Service
     participant A as Controller Service
     participant H as Fixture and DUT
 
@@ -294,9 +305,10 @@ sequenceDiagram
     API-->>UI: Campaign ready
 
     W->>API: Claim campaign planning work
-    API-->>W: History, legal contract and remaining budget
-    W->>W: Propose next candidate
-    W->>API: Submit candidate
+    API-->>W: History, approved legal domain, config and remaining budget
+    W->>D: Select next candidate(context)
+    D-->>W: Candidate and rationale
+    W->>API: Submit candidate proposal
     API->>API: Deterministic safety validation
     API-->>W: Approved episode persisted
 
@@ -320,7 +332,7 @@ The pull model means the backend never needs to open a connection into the resea
 - an expired lease can be investigated before retry;
 - a backend or UI restart does not erase the episode record;
 - disconnecting the backend does not grant the agent permission to invent more work;
-- the agent can move the fixture to its safe shutdown state when communication is lost.
+- the Controller Service moves the fixture to its safe shutdown state when communication is lost.
 
 This is conceptually aligned with the existing claim-and-worker pattern, but ActiveQual needs its own physical-execution lease semantics.
 
@@ -329,7 +341,8 @@ This is conceptually aligned with the existing claim-and-worker pattern, but Act
 | Component | Propose experiment | Approve against contract | Energize hardware | Classify functional result | Emergency stop |
 |---|---:|---:|---:|---:|---:|
 | Optional LLM assistant | Suggestions only | No | No | No | No |
-| Campaign planner | Yes | No | No | No | No |
+| Decision Service | Selects candidate | No | No | No | No |
+| Agent Service | Orchestrates and submits proposal | No | No | No | No |
 | Backend safety validator | No | Yes | No | No | Requests abort |
 | Bench safety validator | No | Yes again | Authorizes driver call | No | Yes |
 | Instrument/controller limits | No | Enforces local bounds | Yes | No | Yes |
@@ -362,7 +375,7 @@ The backend database is authoritative for:
 - test-contract versions and approval state;
 - fixture registrations and compatible firmware/calibration hashes;
 - campaigns, budgets, planner configuration, and random seeds;
-- episode proposals, safety decisions, leases, state, and outcomes;
+- episode proposals and Decision Service rationale, safety decisions, leases, state, and outcomes;
 - reproduction and minimization relationships;
 - audit records and researcher actions;
 - references and checksums for raw evidence.
@@ -379,6 +392,7 @@ The Controller Service may keep a local recovery spool while disconnected. Local
 | BFF restarts | No physical authority is lost or gained; browser retries status reads |
 | Backend unavailable | Controller Service finishes only the currently leased bounded episode if safe, shuts down outputs, spools evidence, and claims no new work |
 | Agent Service fails | No new episode is proposed; current persisted episode state remains inspectable |
+| Decision Service is unavailable or returns no valid candidate | Agent does not submit a proposal; campaign remains inspectable and may resume after the planner failure is resolved |
 | Controller Service crashes | Test-controller watchdog/interlock moves outputs to shutdown; episode becomes indeterminate until lease reconciliation |
 | Instrument disconnects | Abort the episode, remove power where possible, and classify it as an invalid experiment or safety abort rather than DUT failure |
 | DUT stops heartbeating | Continue independent measurements long enough for the reviewed oracle, then shut down and classify using the measured evidence |
@@ -395,7 +409,7 @@ Browser
   -> ActiveQual Kotlin BFF
   -> ActiveQual Kotlin backend
   -> PostgreSQL + local trace storage
-  -> ActiveQual Agent Service worker
+  -> ActiveQual Agent Service worker (including the Decision Service module for the MVP)
   -> ActiveQual Controller and Adapter bench process
   -> USB/LAN instruments + test-controller MCU + DUT
 ```
@@ -408,13 +422,13 @@ Processes remain separate where the deployment table specifies a boundary, even 
 |---|---|
 | CTX-01 | Every physical episode references an immutable contract version, fixture identity, firmware identity, planner configuration, and calibration record |
 | CTX-02 | Only reviewed and armed campaigns may produce claimable physical episodes |
-| CTX-03 | Planner output cannot reach an instrument without backend and bench-side deterministic validation |
+| CTX-03 | Decision Service output cannot reach an instrument without Agent submission, backend validation, and bench-side deterministic validation |
 | CTX-04 | The Controller Service cannot widen contract limits or create experiments |
 | CTX-05 | The test controller and hardware cutoff remain able to shut down if application processes freeze or disconnect |
 | CTX-06 | Requested and measured conditions are stored separately |
 | CTX-07 | Outcomes distinguish `PASS`, `DUT_FAILURE`, `INVALID_EXPERIMENT`, and `SAFETY_ABORT` |
 | CTX-08 | Large evidence files are checksummed and traceable to exactly one episode |
-| CTX-09 | Baseline and adaptive planners execute through the same safety and bench path |
+| CTX-09 | Baseline and adaptive algorithms behind the Decision Service use the same planner interface and execute through the same safety and bench path |
 | CTX-10 | The UI displays failures, safety aborts, invalid experiments, budget usage, and uncertainty without hiding execution errors |
 | CTX-11 | Loss of backend connectivity prevents new work and causes a bounded move to the safe shutdown state |
 | CTX-12 | A passing campaign is reported as “no counterexample found within this campaign budget” |
@@ -430,6 +444,7 @@ Processes remain separate where the deployment table specifies a boundary, even 
 7. Safety validation occurs before persistence as approved work and again at the bench.
 8. PostgreSQL owns campaign metadata; large evidence uses checksummed trace storage.
 9. The first DUT, three rails, bounded event templates, and one adaptive method define the implementation baseline.
+10. Candidate-selection algorithms live behind the Decision Service interface; Agent owns campaign lifecycle and can initially host Decision as a logical module in its worker.
 
 ## 16. Open decisions and follow-up documents
 
@@ -441,7 +456,7 @@ Processes remain separate where the deployment table specifies a boundary, even 
 | Episode lifecycle and lease transitions | Explicit persisted state machine with idempotent result submission | HLD 03: Episode Execution and Safety State Machine |
 | Test-contract protobuf structure | Typed variables, units, constraints, transitions, oracle rules, and budget | HLD 04: Test Contract and Domain Model |
 | Bench-agent RPC surface | Claim, heartbeat, renew, submit, abort acknowledgement, and fixture health | HLD 05: APIs and Instrumentation Protocols |
-| First adaptive method | Mixed-domain active learner using continuous robustness plus failure probability | HLD 06: Planner and Evaluation Design |
+| Decision Service planner interface and first adaptive method | Common candidate-selection interface; mixed-domain active learner using continuous robustness plus failure probability | HLD 06: Planner and Evaluation Design |
 | Machine authentication | Reuse a verified service identity suitable for the local Controller Service | HLD 07: Security and Deployment |
 | Trace storage mechanism | Local filesystem for MVP behind an interface; object storage later | HLD 08: Persistence and Observability |
 
@@ -454,7 +469,7 @@ This design is ready for the next HLD when the team agrees on:
 - the control-plane versus bench-plane split;
 - the local deployment assumption;
 - the lease-based bench pull model;
-- component authority, especially that the planner cannot approve or execute hardware commands;
+- component authority, especially that Decision Service can select candidates but cannot approve them or execute hardware commands, while Agent owns campaign orchestration;
 - the first DUT category and minimum three-rail fixture.
 
 ## 18. Implementation evidence used
