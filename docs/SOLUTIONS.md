@@ -1,3 +1,5 @@
+> **Status:** Methodology and alternative implementation proposal. The ActiveQual HLD documents define current service ownership. For the implemented architecture, Decision proposes candidates; Backend and Controller own approval and execution. Values and hardware limits in this document are examples until reviewed for the selected fixture.
+
 # ChipCheck — Solutions to Every Identified Issue
 
 > For each problem, a **practical fix** that reduces scope, effort, or complexity while keeping the project credible.
