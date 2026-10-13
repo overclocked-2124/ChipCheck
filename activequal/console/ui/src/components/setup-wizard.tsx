@@ -111,7 +111,7 @@ export function SetupWizard() {
             <Field label="Available workloads" {...props("workloads")} hint="e.g. oled_refresh, idle" />
             <Field label="Settling time (ms)" {...props("settleMs")} type="number" />
             <Field label="Workload duration (ms)" {...props("durationMs")} type="number" />
-            <Area label="Forbidden combinations or sequence notes" {...props("forbiddenCombinations")} required={false} hint="Optional restrictions reviewed for this setup" />
+            <Area label="Forbidden combinations or sequence notes" {...props("forbiddenCombinations")} required={false} hint="Free-text restrictions cannot be checked for a preview yet; leave empty to request proposals" />
           </div>}
           {step === 2 && <div className="grid">
             <Area label="Required observations" {...props("observations")} hint="e.g. measured rail voltage, current, display latency, heartbeat, reset count" />
