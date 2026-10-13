@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package chipcheck.console.v1;
+
+// Browser-facing contract for the first configuration-to-proposals milestone.
+// This API does not arm a fixture, approve a candidate, or start a campaign.
+service ConsoleService {
+  rpc PreviewProposedTests(PreviewProposedTestsRequest) returns (PreviewProposedTestsResponse);
+}
+
+message PreviewProposedTestsRequest {
+  TestSetup setup = 1;
+}
+
+message TestSetup {
+  string name = 1;
+  string dut = 2;
+  string firmware = 3;
+  string fixture = 4;
+  string wiring = 5;
+  VariableRail rail = 6;
+  string led_states = 7;
+  string workloads = 8;
+  uint32 settle_ms = 9;
+  uint32 duration_ms = 10;
+  string observations = 11;
+  string requirement = 12;
+  string forbidden_combinations = 13;
+  SafetyBounds safety = 14;
+  uint32 experiment_budget = 15;
+}
+
+message VariableRail {
+  string name = 1;
+  double minimum_volts = 2;
+  double maximum_volts = 3;
+  double step_volts = 4;
+}
+
+message SafetyBounds {
+  double maximum_volts = 1;
+  double maximum_amps = 2;
+  double maximum_celsius = 3;
+  string safe_return_state = 4;
+}
+
+message PreviewProposedTestsResponse {
+  ProposalSource source = 1;
+  string setup_name = 2;
+  repeated ProposedTest tests = 3;
+}
+
+enum ProposalSource {
+  PROPOSAL_SOURCE_UNSPECIFIED = 0;
+  PROPOSAL_SOURCE_MOCK = 1;
+  PROPOSAL_SOURCE_BACKEND = 2;
+}
+
+message ProposedTest {
+  string id = 1;
+  string title = 2;
+  string purpose = 3;
+  repeated string requested = 4;
+  repeated string expected_observations = 5;
+}
