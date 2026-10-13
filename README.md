@@ -22,3 +22,10 @@ ChipCheck is a hardware-in-the-loop (HIL) test station that:
 - [HLD 01: System Context and Platform Boundaries](./docs/01-activequal-system-context-and-platform-boundaries.md)
 - [HLD 02: Hardware Architecture](./docs/02-activequal-hardware-architecture.md)
 - [HLD 03: Episode Execution and Safety State Machine](./docs/03-activequal-episode-execution-and-safety-state-machine.md)
+
+- [Algorithm and ML Methodology](./Documnentation%20on%20Algorithm/ChipCheck_Algorithm_and_ML_Methodology.docx)
+- [Simplified implementation proposal](./docs/SIMPLIFIED-PLAN.md)
+- [Design issue analysis](./docs/SOLUTIONS.md)
+- [Project walkthrough](./docs/WALKTHROUGH.md)
+
+The HLD documents define the current service boundaries. The methodology documents provide planner and research guidance; their combined Python stack is an alternative proposal.
