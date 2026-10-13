@@ -8,7 +8,12 @@ export type SetupDraft = {
   railMin: string;
   railMax: string;
   railStep: string;
-  ledStates: string;
+  sensorRailName: string;
+  sensorRailMin: string;
+  sensorRailMax: string;
+  sensorRailStep: string;
+  redLedOptions: string;
+  greenLedOptions: string;
   workloads: string;
   settleMs: string;
   durationMs: string;
@@ -20,6 +25,8 @@ export type SetupDraft = {
   maxTemperature: string;
   safeState: string;
   experimentBudget: string;
+  plannerMethod: "tpe" | "random" | "grid";
+  plannerSeed: string;
 };
 
 export type ProposedTest = {
@@ -28,18 +35,22 @@ export type ProposedTest = {
   purpose: string;
   requested: string[];
   expectedObservations: string[];
+  reason?: string;
+  conditions?: { railVolts: number; sensorRailVolts?: number; redLed: string; greenLed: string; workload: string };
 };
 
 export type ProposalResponse = {
-  source: "mock" | "backend";
+  source: "mock" | "backend" | "decision";
   setupName: string;
   tests: ProposedTest[];
+  method?: string;
+  historyUsed?: number;
 };
 
 export const emptyDraft: SetupDraft = {
   name: "", dut: "", firmware: "", fixture: "", wiring: "",
-  railName: "", railMin: "", railMax: "", railStep: "", ledStates: "",
+  railName: "", railMin: "", railMax: "", railStep: "", sensorRailName: "", sensorRailMin: "", sensorRailMax: "", sensorRailStep: "", redLedOptions: "on, off", greenLedOptions: "on, off",
   workloads: "", settleMs: "", durationMs: "", observations: "",
   requirement: "", forbiddenCombinations: "", maxVoltage: "",
-  maxCurrent: "", maxTemperature: "", safeState: "", experimentBudget: ""
+  maxCurrent: "", maxTemperature: "", safeState: "", experimentBudget: "", plannerMethod: "tpe", plannerSeed: "42"
 };

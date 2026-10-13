@@ -29,9 +29,9 @@ function Area({ label, name, value, onChange, hint, required = true }: {
 
 const requiredByStep: Key[][] = [
   ["name", "dut", "firmware", "fixture"],
-  ["railName", "railMin", "railMax", "railStep", "ledStates", "workloads", "settleMs", "durationMs"],
+  ["railName", "railMin", "railMax", "railStep", "redLedOptions", "greenLedOptions", "workloads", "settleMs", "durationMs"],
   ["observations", "requirement"],
-  ["maxVoltage", "maxCurrent", "maxTemperature", "safeState", "experimentBudget"],
+  ["maxVoltage", "maxCurrent", "maxTemperature", "safeState", "experimentBudget", "plannerSeed"],
   []
 ];
 
@@ -46,7 +46,11 @@ export function SetupWizard() {
   const next = () => {
     if (requiredByStep[step].some(key => !draft[key].trim())) { setError("Complete the required fields to continue."); return; }
     if (step === 1 && Number(draft.railMin) >= Number(draft.railMax)) { setError("The minimum rail voltage must be below the maximum."); return; }
+    if (step === 1 && (Number(draft.railStep) <= 0 || !draft.workloads.split(",").every(value => value.trim()))) { setError("Enter a positive rail step and comma-separated workloads."); return; }
+    if (step === 1 && draft.sensorRailName.trim() && (!draft.sensorRailMin || !draft.sensorRailMax || !draft.sensorRailStep || Number(draft.sensorRailMin) >= Number(draft.sensorRailMax) || Number(draft.sensorRailStep) <= 0)) { setError("Complete the optional sensor rail with a valid range and step."); return; }
+    if (step === 1 && [draft.redLedOptions, draft.greenLedOptions].some(value => value.split(",").some(option => !["on", "off"].includes(option.trim().toLowerCase())))) { setError("LED options must be on, off, or both separated by a comma."); return; }
     if (step === 3 && Number(draft.experimentBudget) < 1) { setError("Enter an experiment budget of at least 1."); return; }
+    if (step === 3 && Number(draft.maxVoltage) < Math.max(Number(draft.railMax), draft.sensorRailName ? Number(draft.sensorRailMax) : 0)) { setError("The voltage ceiling must cover each selected rail range."); return; }
     setError(""); setStep(current => Math.min(current + 1, steps.length - 1));
   };
   const showProposals = async () => {
@@ -55,7 +59,7 @@ export function SetupWizard() {
       const response = await fetch("/api/proposals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Could not load proposed tests");
-      setProposal({ source: body.source === "PROPOSAL_SOURCE_MOCK" ? "mock" : "backend", setupName: body.setupName, tests: body.tests });
+      setProposal({ source: body.source === "PROPOSAL_SOURCE_DECISION" ? "decision" : "backend", setupName: body.setupName, tests: body.tests, method: body.method, historyUsed: body.historyUsed });
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load proposed tests"); }
     finally { setLoading(false); }
   };
@@ -77,10 +81,10 @@ export function SetupWizard() {
         <h1>{["Define your test setup", "Choose available controls", "Describe the evidence", "Set safety boundaries", "Review and preview"][step]}</h1>
         <p className="intro">{[
           "Start with the exact device, firmware, and fixture. Every proposed test will be tied to this setup.",
-          "Tell ChipCheck which conditions the bench can vary. Use values reviewed for your actual hardware.",
+          "Tell ChipCheck which conditions the bench can vary. Separate multiple states or workloads with commas.",
           "Specify what the bench records and the public requirements used to judge behavior.",
           "Enter reviewed limits and the safe return state for this fixture. These values are configuration, not safety approval.",
-          "Check the configuration before viewing example proposed tests. Candidate selection is supplied by other services."
+          "Check the configuration before requesting candidates from the Decision Service. Proposals still need Backend and bench approval."
         ][step]}</p>
         <div className="progress" aria-label={`Step ${step + 1} of ${steps.length}`}><span style={{ width: `${((step + 1) / steps.length) * 100}%` }} /></div>
 
@@ -98,8 +102,13 @@ export function SetupWizard() {
             <Field label="Minimum voltage (V)" {...props("railMin")} type="number" />
             <Field label="Maximum voltage (V)" {...props("railMax")} type="number" />
             <Field label="Adjustment step (V)" {...props("railStep")} type="number" />
-            <Field label="Allowed LED states" {...props("ledStates")} hint="e.g. red on/off, green on/off" />
-            <Field label="Available workloads" {...props("workloads")} hint="e.g. OLED refresh" />
+            <Field label="Optional sensor rail name" {...props("sensorRailName")} required={false} hint="e.g. sensor rail" />
+            <Field label="Sensor rail minimum (V)" {...props("sensorRailMin")} required={false} type="number" />
+            <Field label="Sensor rail maximum (V)" {...props("sensorRailMax")} required={false} type="number" />
+            <Field label="Sensor rail step (V)" {...props("sensorRailStep")} required={false} type="number" />
+            <Field label="Red LED options" {...props("redLedOptions")} hint="on, off" />
+            <Field label="Green LED options" {...props("greenLedOptions")} hint="on, off" />
+            <Field label="Available workloads" {...props("workloads")} hint="e.g. oled_refresh, idle" />
             <Field label="Settling time (ms)" {...props("settleMs")} type="number" />
             <Field label="Workload duration (ms)" {...props("durationMs")} type="number" />
             <Area label="Forbidden combinations or sequence notes" {...props("forbiddenCombinations")} required={false} hint="Optional restrictions reviewed for this setup" />
@@ -113,13 +122,16 @@ export function SetupWizard() {
             <Field label="Maximum current (A)" {...props("maxCurrent")} type="number" />
             <Field label="Maximum temperature (°C)" {...props("maxTemperature")} type="number" />
             <Field label="Experiment budget" {...props("experimentBudget")} type="number" />
+            <label className="field"><span>Planner method *</span><select value={draft.plannerMethod} onChange={e => change("plannerMethod", e.target.value as SetupDraft["plannerMethod"])}><option value="tpe">Adaptive TPE</option><option value="random">Uniform random</option><option value="grid">Grid baseline</option></select></label>
+            <Field label="Planner seed" {...props("plannerSeed")} type="number" />
             <Area label="Reviewed safe return state" {...props("safeState")} hint="Describe output and shutdown order for this fixture" />
           </div>}
           {step === 4 && <div className="review">
             <div className="review-row"><span>Setup</span><strong>{draft.name}</strong><small>{draft.dut} · firmware {draft.firmware} · {draft.fixture}</small></div>
-            <div className="review-row"><span>Controls</span><strong>{draft.railName}: {draft.railMin}–{draft.railMax} V</strong><small>{draft.workloads} · {draft.ledStates}</small></div>
+            <div className="review-row"><span>Controls</span><strong>{draft.railName}: {draft.railMin}–{draft.railMax} V</strong><small>{draft.sensorRailName ? `${draft.sensorRailName}: ${draft.sensorRailMin}–${draft.sensorRailMax} V · ` : ""}{draft.workloads} · red: {draft.redLedOptions} · green: {draft.greenLedOptions}</small></div>
             <div className="review-row"><span>Evidence & requirement</span><strong>{draft.observations}</strong><small>{draft.requirement}</small></div>
             <div className="review-row"><span>Limits & budget</span><strong>{draft.experimentBudget} physical experiments</strong><small>{draft.maxVoltage} V / {draft.maxCurrent} A / {draft.maxTemperature} °C · {draft.safeState}</small></div>
+            <div className="review-row"><span>Planner</span><strong>{draft.plannerMethod.toUpperCase()}</strong><small>Seed {draft.plannerSeed}; no measured history yet</small></div>
           </div>}
           {error && <p className="error" role="alert">{error}</p>}
           <div className="card-actions">{step > 0 && <button className="secondary" type="button" onClick={() => { setStep(step - 1); setProposal(null); setError(""); }}>Back</button>}
@@ -127,9 +139,9 @@ export function SetupWizard() {
           </div>
         </section>
 
-        {proposal && <section className="proposal" aria-live="polite"><div className="proposal-title"><div><div className="eyebrow">PROPOSED TESTS</div><h2>Ready for review</h2></div><span className="mock-badge">MOCK PREVIEW</span></div>
-          <p>These examples show the review layout. No planner has selected them, and they have not been validated for execution.</p>
-          {proposal.tests.map((test, index) => <article className="test-card" key={test.id}><div className="test-number">{String(index + 1).padStart(2, "0")}</div><div><h3>{test.title}</h3><p>{test.purpose}</p><div className="test-detail"><span>REQUESTED</span>{test.requested.join(" · ")}</div><div className="test-detail"><span>OBSERVE</span>{test.expectedObservations.join(" · ")}</div></div></article>)}
+        {proposal && <section className="proposal" aria-live="polite"><div className="proposal-title"><div><div className="eyebrow">PROPOSED TESTS</div><h2>Ready for review</h2></div><span className="mock-badge">DECISION · {proposal.method?.toUpperCase()}</span></div>
+          <p>{proposal.historyUsed ? `${proposal.historyUsed} measured results informed this proposal. ` : "These are startup proposals; no measured results have been supplied yet. "}Candidates are unapproved and cannot execute hardware from this screen.</p>
+          {proposal.tests.map((test, index) => <article className="test-card" key={test.id}><div className="test-number">{String(index + 1).padStart(2, "0")}</div><div><h3>{test.title}</h3><p>{test.reason || test.purpose}</p><div className="test-detail"><span>REQUESTED</span>{test.requested.join(" · ")}</div><div className="test-detail"><span>OBSERVE</span>{test.expectedObservations.join(" · ")}</div></div></article>)}
         </section>}
       </div>
     </main>

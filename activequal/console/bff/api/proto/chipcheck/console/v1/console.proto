@@ -10,6 +10,11 @@ service ConsoleService {
 
 message PreviewProposedTestsRequest {
   TestSetup setup = 1;
+  string method = 2; // tpe, random, or grid
+  uint32 seed = 3;
+  uint32 count = 4;
+  repeated MeasuredResult history = 5;
+  uint32 warmup_trials = 6;
 }
 
 message TestSetup {
@@ -28,6 +33,10 @@ message TestSetup {
   string forbidden_combinations = 13;
   SafetyBounds safety = 14;
   uint32 experiment_budget = 15;
+  repeated string red_led_options = 16;
+  repeated string green_led_options = 17;
+  repeated string workload_options = 18;
+  repeated VariableRail additional_rails = 19;
 }
 
 message VariableRail {
@@ -48,12 +57,15 @@ message PreviewProposedTestsResponse {
   ProposalSource source = 1;
   string setup_name = 2;
   repeated ProposedTest tests = 3;
+  string method = 4;
+  uint32 history_used = 5;
 }
 
 enum ProposalSource {
   PROPOSAL_SOURCE_UNSPECIFIED = 0;
   PROPOSAL_SOURCE_MOCK = 1;
   PROPOSAL_SOURCE_BACKEND = 2;
+  PROPOSAL_SOURCE_DECISION = 3;
 }
 
 message ProposedTest {
@@ -62,4 +74,20 @@ message ProposedTest {
   string purpose = 3;
   repeated string requested = 4;
   repeated string expected_observations = 5;
+  ProposedConditions conditions = 6;
+  string reason = 7;
+}
+
+message ProposedConditions {
+  double rail_volts = 1;
+  string red_led = 2;
+  string green_led = 3;
+  string workload = 4;
+  optional double sensor_rail_volts = 5;
+}
+
+message MeasuredResult {
+  ProposedConditions conditions = 1;
+  string outcome = 2;
+  optional double robustness = 3;
 }
