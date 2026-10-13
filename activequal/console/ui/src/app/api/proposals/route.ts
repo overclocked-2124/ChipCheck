@@ -11,11 +11,14 @@ type Client = grpc.Client & {
 };
 
 function toRequest(draft: SetupDraft) {
-  return { setup: {
+  const options = (value: string) => (value || "").split(",").map(item => item.trim().toLowerCase()).filter(Boolean);
+  return { method: draft.plannerMethod, seed: Number(draft.plannerSeed), count: 3, warmupTrials: 8, setup: {
     name: draft.name, dut: draft.dut, firmware: draft.firmware,
     fixture: draft.fixture, wiring: draft.wiring,
     rail: { name: draft.railName, minimumVolts: Number(draft.railMin), maximumVolts: Number(draft.railMax), stepVolts: Number(draft.railStep) },
-    ledStates: draft.ledStates, workloads: draft.workloads,
+    additionalRails: draft.sensorRailName?.trim() ? [{ name: draft.sensorRailName, minimumVolts: Number(draft.sensorRailMin), maximumVolts: Number(draft.sensorRailMax), stepVolts: Number(draft.sensorRailStep) }] : [],
+    ledStates: `red: ${draft.redLedOptions}; green: ${draft.greenLedOptions}`, workloads: draft.workloads,
+    redLedOptions: options(draft.redLedOptions), greenLedOptions: options(draft.greenLedOptions), workloadOptions: options(draft.workloads),
     settleMs: Number(draft.settleMs), durationMs: Number(draft.durationMs),
     observations: draft.observations, requirement: draft.requirement,
     forbiddenCombinations: draft.forbiddenCombinations,
@@ -28,8 +31,10 @@ export async function POST(request: NextRequest) {
   let draft: SetupDraft;
   try { draft = await request.json() as SetupDraft; }
   catch { return NextResponse.json({ error: "Invalid configuration JSON" }, { status: 400 }); }
-  if (!draft || typeof draft.name !== "string" || !draft.name.trim()) {
-    return NextResponse.json({ error: "A setup name is required" }, { status: 400 });
+  if (!draft || typeof draft.name !== "string" || !draft.name.trim() ||
+      typeof draft.railName !== "string" || typeof draft.redLedOptions !== "string" ||
+      typeof draft.greenLedOptions !== "string" || typeof draft.workloads !== "string") {
+    return NextResponse.json({ error: "Setup name, rail, LED options, and workloads are required" }, { status: 400 });
   }
 
   const proto = path.resolve(process.cwd(), "../bff/api/proto/chipcheck/console/v1/console.proto");
@@ -46,6 +51,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "BFF unavailable";
-    return NextResponse.json({ error: `Could not load proposed tests: ${message}` }, { status: 503 });
+    return NextResponse.json({ error: `Could not load proposed tests: ${message}` }, { status: (error as grpc.ServiceError).code === grpc.status.INVALID_ARGUMENT ? 400 : 503 });
   } finally { client.close(); }
 }
