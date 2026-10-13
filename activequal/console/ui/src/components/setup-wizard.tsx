@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { previewProposal } from "@/lib/mock";
 import { emptyDraft, ProposalResponse, SetupDraft } from "@/lib/types";
 
 const steps = ["Setup", "Controls", "Evidence", "Safety & budget", "Review"] as const;
@@ -41,6 +40,7 @@ export function SetupWizard() {
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
   const [proposal, setProposal] = useState<ProposalResponse | null>(null);
+  const [loading, setLoading] = useState(false);
   const change = (name: Key, value: string) => { setDraft(old => ({ ...old, [name]: value })); setError(""); setProposal(null); };
   const props = (name: Key) => ({ name, value: draft[name], onChange: change });
   const next = () => {
@@ -48,6 +48,16 @@ export function SetupWizard() {
     if (step === 1 && Number(draft.railMin) >= Number(draft.railMax)) { setError("The minimum rail voltage must be below the maximum."); return; }
     if (step === 3 && Number(draft.experimentBudget) < 1) { setError("Enter an experiment budget of at least 1."); return; }
     setError(""); setStep(current => Math.min(current + 1, steps.length - 1));
+  };
+  const showProposals = async () => {
+    setLoading(true); setError(""); setProposal(null);
+    try {
+      const response = await fetch("/api/proposals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Could not load proposed tests");
+      setProposal({ source: body.source === "PROPOSAL_SOURCE_MOCK" ? "mock" : "backend", setupName: body.setupName, tests: body.tests });
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load proposed tests"); }
+    finally { setLoading(false); }
   };
 
   return <div className="shell">
@@ -113,7 +123,7 @@ export function SetupWizard() {
           </div>}
           {error && <p className="error" role="alert">{error}</p>}
           <div className="card-actions">{step > 0 && <button className="secondary" type="button" onClick={() => { setStep(step - 1); setProposal(null); setError(""); }}>Back</button>}
-            {step < 4 ? <button className="primary" type="button" onClick={next}>Continue <span>→</span></button> : <button className="primary" type="button" onClick={() => setProposal(previewProposal(draft))}>Show proposed tests <span>→</span></button>}
+            {step < 4 ? <button className="primary" type="button" onClick={next}>Continue <span>→</span></button> : <button className="primary" type="button" disabled={loading} onClick={showProposals}>{loading ? "Loading…" : "Show proposed tests"} <span>→</span></button>}
           </div>
         </section>
 
