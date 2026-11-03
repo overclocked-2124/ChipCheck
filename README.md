@@ -27,5 +27,6 @@ ChipCheck is a hardware-in-the-loop (HIL) test station that:
 - [Simplified implementation proposal](./docs/SIMPLIFIED-PLAN.md)
 - [Design issue analysis](./docs/SOLUTIONS.md)
 - [Project walkthrough](./docs/WALKTHROUGH.md)
+- [SWE Handoff: Software-First POC, Plug-and-Play Planners & Hardware Integration](./docs/SWE-POC-HANDOFF.md)
 
 The HLD documents define the current service boundaries. The methodology documents provide planner and research guidance; their combined Python stack is an alternative proposal.
