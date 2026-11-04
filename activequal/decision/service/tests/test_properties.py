@@ -2,6 +2,7 @@
 
 import contextlib
 import copy
+import os
 import unittest
 
 try:
@@ -15,7 +16,7 @@ import optuna
 from decision import InvalidRequest, propose
 from domain import condition_key, domain_from_contract, is_forbidden
 
-SETTINGS = settings(max_examples=60, deadline=None, suppress_health_check=list(HealthCheck))
+SETTINGS = settings(max_examples=int(os.environ.get("PROP_EXAMPLES", "60")), deadline=None, suppress_health_check=list(HealthCheck))
 
 
 @st.composite
@@ -30,7 +31,7 @@ def control_spec(draw):
     if kind in {"integer", "duration"}:
         step = draw(st.integers(1, 5))
         low = draw(st.integers(0, 20))
-        n = draw(st.integers(2, 20))
+        n = draw(st.one_of(st.integers(2, 20), st.integers(10**6, 10**12)))   # include ranges too big to list
         return {"type": kind, "min": low, "max": low + n * step, "step": step,
                 "nominal": low + draw(st.integers(0, n)) * step}
     if kind == "boolean":

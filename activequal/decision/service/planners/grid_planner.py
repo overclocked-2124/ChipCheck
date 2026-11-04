@@ -15,6 +15,8 @@ class GridPlanner(OptunaPlanner):
     name = "grid"
 
     def make_sampler(self, domain, seed, config):
+        if any(not values for values in domain.grid_values.values()):
+            raise InvalidRequest("grid baseline needs every control to have at most 10000 values")
         total = 1
         for values in domain.grid_values.values():
             total *= len(values)

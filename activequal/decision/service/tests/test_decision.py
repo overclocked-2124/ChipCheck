@@ -171,6 +171,15 @@ class ContractTests(unittest.TestCase):
                 "a": {"type": "boolean", "activeWhen": {"control": "b", "eq": True}},
                 "b": {"type": "boolean", "activeWhen": {"control": "a", "eq": True}}}, forbidden=[]),
             "unsupported type": contract(controls={"x": {"type": "bitfield"}}),
+            "needs a type": contract(controls={"x": {"type": ["integer"]}}),
+            "whole number of steps": contract(controls={
+                "v": {"type": "continuous", "min": 0.0, "max": 1.0, "step": 0.3, "nominal": 0.0}}),
+            "i range must be a whole number": contract(controls={
+                "i": {"type": "integer", "min": 0, "max": 10, "step": 3, "nominal": 0}}),
+            "outside the supported range": contract(controls={
+                "v": {"type": "continuous", "min": 0.0, "max": 1e27, "step": 0.25, "nominal": 0.0}}),
+            "more than 10\\^12 steps": contract(controls={
+                "v": {"type": "continuous", "min": 0.0, "max": 1e9, "step": 1e-6, "nominal": 0.0}}),
             "budget": contract(campaign={"budget": 0}),
         }
         for message, bad in cases.items():
@@ -215,6 +224,25 @@ class GPPlannerTests(unittest.TestCase):
         with mock.patch.object(optuna.samplers, "GPSampler", side_effect=ImportError("torch")), \
                 self.assertRaisesRegex(InvalidRequest, "requirements-gp.txt"):
             propose({"setup": setup(), "method": "gp"})
+
+
+class HugeRangeTests(unittest.TestCase):
+    """A huge numeric range is user input: it must not allocate memory proportional to its size."""
+
+    def huge(self, kind):
+        spec = {"type": kind, "min": 0, "max": 10**12, "step": 1, "nominal": 0}
+        return {"contractVersion": 2, "setup": {"dut": "d"}, "controls": {"x": spec}, "campaign": {"budget": 5}}
+
+    def test_search_planners_accept_huge_integer_ranges(self):
+        for kind in ("integer", "duration"):
+            for method in ("random", "tpe"):
+                with self.subTest(kind=kind, method=method):
+                    result = propose({"contract": self.huge(kind), "method": method, "count": 2})
+                    self.assertEqual(len(result["tests"]), 2)
+
+    def test_grid_refuses_ranges_it_cannot_enumerate(self):
+        with self.assertRaisesRegex(InvalidRequest, "at most 10000 values"):
+            propose({"contract": self.huge("integer"), "method": "grid"})
 
 
 class FallbackTests(unittest.TestCase):

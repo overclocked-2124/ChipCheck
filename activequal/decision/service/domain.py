@@ -16,6 +16,8 @@ import optuna
 CONTINUOUS = "continuous"
 INTEGER_TYPES = {"integer", "duration"}
 MAX_CONTROLS = 12
+MAX_MAGNITUDE = 1e15   # numeric control bounds beyond this are not physical quantities
+MAX_STEPS = 1e12       # keeps Optuna's decimal arithmetic and the grid logic well inside their limits
 OUTCOMES = {"PASS", "DUT_FAILURE", "INVALID_EXPERIMENT", "SAFETY_ABORT"}
 
 
@@ -135,15 +137,26 @@ def _control(name: str, spec: Any) -> Control:
     if not isinstance(spec, dict):
         raise InvalidRequest(f"control {name} must be an object")
     kind = spec.get("type")
+    if not isinstance(kind, str):
+        raise InvalidRequest(f"control {name} needs a type")
     if kind in {CONTINUOUS, "integer", "duration"}:
         low = number(spec.get("min"), f"{name}.min")
         high = number(spec.get("max"), f"{name}.max")
         step = number(spec.get("step"), f"{name}.step")
         nominal = number(spec.get("nominal"), f"{name}.nominal")
+        for label, value in (("min", low), ("max", high), ("step", step), ("nominal", nominal)):
+            if abs(value) > MAX_MAGNITUDE:
+                raise InvalidRequest(f"{name}.{label} is outside the supported range")
         if high <= low or step <= 0 or step > high - low or not low <= nominal <= high:
             raise InvalidRequest(f"{name} range, step or nominal is invalid")
+        steps = (high - low) / step
+        if steps > MAX_STEPS:
+            raise InvalidRequest(f"{name} has more than 10^12 steps")
+        tolerance = 1e-6 + 1e-12 * steps
+        if abs(steps - round(steps)) > tolerance:  # Optuna would silently lower max otherwise
+            raise InvalidRequest(f"{name} range must be a whole number of steps")
         offset = (nominal - low) / step
-        if abs(offset - round(offset)) > 1e-6:
+        if abs(offset - round(offset)) > tolerance:
             raise InvalidRequest(f"{name}.nominal must sit on the step grid")
         if kind == CONTINUOUS:
             dist: optuna.distributions.BaseDistribution = optuna.distributions.FloatDistribution(low, high, step=step)
@@ -168,17 +181,28 @@ def _control(name: str, spec: Any) -> Control:
     raise InvalidRequest(f"control {name} has unsupported type {kind!r}")
 
 
+MAX_GRID_VALUES = 10000
+
+
 def _finite_values(control: Control) -> list[Any]:
+    """Every value of a control, or [] when there are too many to enumerate (grid baseline only).
+
+    The count is computed arithmetically so a huge range never allocates a list.
+    """
     dist = control.distribution
     if isinstance(dist, optuna.distributions.CategoricalDistribution):
         return list(dist.choices)
     if isinstance(dist, optuna.distributions.IntDistribution):
+        if (dist.high - dist.low) // dist.step + 1 > MAX_GRID_VALUES:
+            return []
         return list(range(dist.low, dist.high + 1, dist.step))
     assert isinstance(dist, optuna.distributions.FloatDistribution) and dist.step is not None
+    if math.floor((dist.high - dist.low) / dist.step + 1e-9) + 1 > MAX_GRID_VALUES:
+        return []
     from decimal import Decimal
     values: list[Any] = []
     current = Decimal(str(dist.low))
-    while current <= Decimal(str(dist.high)) and len(values) <= 10000:
+    while current <= Decimal(str(dist.high)):
         values.append(float(current))
         current += Decimal(str(dist.step))
     return values
