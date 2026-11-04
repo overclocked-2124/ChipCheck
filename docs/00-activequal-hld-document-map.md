@@ -51,7 +51,7 @@ Moving a file into the main Documents folder means it is accepted as the current
 | 01 | System Context and Platform Boundaries | What is ActiveQual, who uses it, which services exist, and where are the application, bench, and hardware boundaries? | Approved |
 | 02 | Hardware Architecture | How are the DUT, power rails, test controller, measurements, signal protection, and physical safety mechanisms connected? | Approved |
 | 03 | Episode Execution and Safety State Machine | How does a campaign and one physical experiment move from proposal through safety validation, execution, shutdown, classification, and recovery? | Initial draft |
-| 04 | Test Contract and Domain Model | How does a DUT declare variables, legal ranges, constraints, workloads, observations, failure rules, budgets, and compatible fixtures? | Planned |
+| 04 | Test Contract and Domain Model | How does a DUT declare variables, legal ranges, constraints, workloads, observations, failure rules, budgets, and compatible fixtures? | Initial draft |
 | 05 | APIs and Instrumentation Protocols | What RPCs and device messages connect the Console, BFF, Backend, Agent, Controller, Adapter, test controller, and DUT? | Planned |
 | 06 | Adaptive Search and Research Evaluation | How are experiments selected, how do baselines and adaptive methods share one interface, and how will performance be compared fairly? | Planned |
 | 07 | Security and Deployment | How are users and machine processes authenticated, how are services deployed, and how are credentials and network boundaries protected? | Planned |
