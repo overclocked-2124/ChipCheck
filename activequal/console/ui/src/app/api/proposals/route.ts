@@ -1,14 +1,11 @@
-import path from "node:path";
-import * as grpc from "@grpc/grpc-js";
-import * as protoLoader from "@grpc/proto-loader";
 import { NextRequest, NextResponse } from "next/server";
 import { SetupDraft } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-type Client = grpc.Client & {
-  previewProposedTests(request: unknown, callback: (error: grpc.ServiceError | null, response: unknown) => void): void;
-};
+type Conditions = { railVolts: number; sensorRailVolts?: number; redLed: string; greenLed: string; workload: string };
+type DecisionResponse = { setupName: string; method: string; historyUsed: number;
+  tests: { id: string; conditions: Conditions; reason: string }[] };
 
 function toRequest(draft: SetupDraft) {
   const options = (value: string) => (value || "").split(",").map(item => item.trim().toLowerCase()).filter(Boolean);
@@ -37,20 +34,41 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Setup name, rail, LED options, and workloads are required" }, { status: 400 });
   }
 
-  const proto = path.resolve(process.cwd(), "../bff/api/proto/chipcheck/console/v1/console.proto");
-  const definition = protoLoader.loadSync(proto, { keepCase: false, longs: String, enums: String, defaults: true });
-  const root = grpc.loadPackageDefinition(definition) as unknown as {
-    chipcheck: { console: { v1: { ConsoleService: new (address: string, credentials: grpc.ChannelCredentials) => Client } } }
-  };
-  const address = process.env.CHIPCHECK_BFF_ADDRESS ?? "127.0.0.1:50051";
-  const client = new root.chipcheck.console.v1.ConsoleService(address, grpc.credentials.createInsecure());
+  // The Decision Service proposes candidates only. It does not approve them or operate hardware.
+  const url = process.env.CHIPCHECK_DECISION_URL ?? "http://127.0.0.1:8001/v1/proposals";
+  const payload = toRequest(draft);
   try {
-    const result = await new Promise<unknown>((resolve, reject) => {
-      client.previewProposedTests(toRequest(draft), (error, response) => error ? reject(error) : resolve(response));
+    const response = await fetch(url, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload), signal: AbortSignal.timeout(15000)
     });
-    return NextResponse.json(result);
+    const body = await response.json() as DecisionResponse & { error?: string };
+    if (!response.ok) {
+      return NextResponse.json({ error: `Could not load proposed tests: ${body.error || `Decision Service returned ${response.status}`}` },
+                               { status: response.status === 400 ? 400 : 503 });
+    }
+    const railName = payload.setup.rail.name || "Rail";
+    const sensorName = payload.setup.additionalRails[0]?.name || "Sensor rail";
+    return NextResponse.json({
+      source: "PROPOSAL_SOURCE_DECISION",
+      setupName: body.setupName,
+      method: body.method,
+      historyUsed: body.historyUsed,
+      tests: body.tests.map((test, index) => ({
+        id: test.id,
+        title: `Candidate ${index + 1}`,
+        purpose: "Unapproved proposed test conditions",
+        reason: test.reason,
+        requested: [`${railName}: ${test.conditions.railVolts} V`,
+                    ...(test.conditions.sensorRailVolts !== undefined ? [`${sensorName}: ${test.conditions.sensorRailVolts} V`] : []),
+                    `Red LED: ${test.conditions.redLed}`, `Green LED: ${test.conditions.greenLed}`,
+                    `Workload: ${test.conditions.workload}`],
+        expectedObservations: [payload.setup.observations || "Configured observations"],
+        conditions: test.conditions
+      }))
+    });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "BFF unavailable";
-    return NextResponse.json({ error: `Could not load proposed tests: ${message}` }, { status: (error as grpc.ServiceError).code === grpc.status.INVALID_ARGUMENT ? 400 : 503 });
-  } finally { client.close(); }
+    const message = error instanceof Error ? error.message : "Decision Service unavailable";
+    return NextResponse.json({ error: `Could not load proposed tests: ${message}` }, { status: 503 });
+  }
 }
