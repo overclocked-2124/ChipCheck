@@ -78,5 +78,111 @@ class DecisionTests(unittest.TestCase):
             propose({"setup": config})
 
 
+class RegressionTests(unittest.TestCase):
+    def test_random_planner_does_not_exhaust_on_long_history(self):
+        # A stateless sampler seeded identically replays the same stream; with 50+
+        # prior points that used to leave zero candidates.
+        import optuna
+        from domain import domain_from_setup
+        config = setup()
+        config["rail"]["stepVolts"] = 0.01
+        domain = domain_from_setup(config)
+        study = optuna.create_study(sampler=optuna.samplers.RandomSampler(seed=7))
+        history = []
+        for _ in range(60):
+            params = study.ask(fixed_distributions=domain.distributions).params
+            history.append({"conditions": params, "outcome": "PASS", "robustness": 0.5})
+        result = propose({"setup": config, "method": "random", "seed": 7, "count": 1, "history": history})
+        self.assertEqual(len(result["tests"]), 1)
+        self.assertNotIn(result["tests"][0]["conditions"], [item["conditions"] for item in history])
+
+    def test_invalid_and_aborted_points_are_never_reproposed(self):
+        config = setup()
+        config["rail"].update(minimumVolts=3.0, maximumVolts=3.1, stepVolts=0.1)
+        config["redLedOptions"], config["greenLedOptions"], config["workloadOptions"] = ["on"], ["off"], ["idle"]
+        points = propose({"setup": config, "method": "random", "count": 2})["tests"]
+        self.assertEqual(len(points), 2)
+        for outcome in ("INVALID_EXPERIMENT", "SAFETY_ABORT"):
+            result = propose({"setup": config, "method": "random", "count": 2,
+                              "history": [{"conditions": points[0]["conditions"], "outcome": outcome}]})
+            self.assertEqual([item["conditions"] for item in result["tests"]], [points[1]["conditions"]])
+            self.assertEqual(result["historyUsed"], 0)
+
+
+def contract(**overrides):
+    value = {
+        "contractVersion": 2,
+        "setup": {"dut": "demo"},
+        "controls": {
+            "oledRailV": {"type": "continuous", "min": 3.0, "max": 3.6, "step": 0.1, "nominal": 3.3},
+            "redLed": {"type": "boolean", "nominal": False},
+            "workload": {"type": "categorical", "values": ["idle", "oled_refresh", "flash_write"], "nominal": "idle"},
+            "flashOffsetMs": {"type": "integer", "min": 0, "max": 20, "step": 5, "nominal": 0,
+                              "activeWhen": {"control": "workload", "eq": "flash_write"}},
+            "dwellMs": {"type": "duration", "min": 200, "max": 400, "step": 100, "nominal": 200},
+        },
+        "forbidden": [{"all": [{"control": "workload", "eq": "flash_write"}, {"control": "oledRailV", "gte": 3.5}]}],
+        "campaign": {"budget": 30},
+    }
+    value.update(overrides)
+    return value
+
+
+class ContractTests(unittest.TestCase):
+    def test_contract_controls_drive_the_search_space(self):
+        result = propose({"contract": contract(), "method": "random", "seed": 3, "count": 10})
+        self.assertEqual(result["setupName"], "demo")
+        for test in result["tests"]:
+            c = test["conditions"]
+            self.assertEqual(set(c), {"oledRailV", "redLed", "workload", "flashOffsetMs", "dwellMs"})
+            self.assertIsInstance(c["redLed"], bool)
+            self.assertIn(c["dwellMs"], {200, 300, 400})
+            self.assertEqual(c["flashOffsetMs"] % 5, 0)
+
+    def test_forbidden_rules_and_inactive_controls(self):
+        seen = []
+        for seed in range(12):
+            seen += propose({"contract": contract(), "method": "random", "seed": seed, "count": 10})["tests"]
+        for test in seen:
+            c = test["conditions"]
+            self.assertFalse(c["workload"] == "flash_write" and c["oledRailV"] >= 3.5)
+            if c["workload"] != "flash_write":
+                self.assertEqual(c["flashOffsetMs"], 0)  # inactive control pinned to nominal
+
+    def test_adaptive_planner_runs_on_mixed_contract_history(self):
+        base = propose({"contract": contract(), "method": "random", "seed": 9, "count": 10})["tests"]
+        history = [{"conditions": item["conditions"], "outcome": "PASS", "robustness": 0.4 + index / 100}
+                   for index, item in enumerate(base)]
+        result = propose({"contract": contract(), "method": "tpe", "seed": 9, "warmupTrials": 5,
+                          "history": history, "count": 3})
+        self.assertEqual(result["historyUsed"], 10)
+        self.assertEqual(len(result["tests"]), 3)
+        self.assertIn("TPE selected", result["tests"][0]["reason"])
+        self.assertEqual(result, propose({"contract": contract(), "method": "tpe", "seed": 9,
+                                          "warmupTrials": 5, "history": history, "count": 3}))
+
+    def test_contract_is_validated(self):
+        cases = {
+            "contractVersion 2": contract(contractVersion=1),
+            "nominal must sit on the step grid": contract(controls={
+                "v": {"type": "continuous", "min": 3.0, "max": 3.6, "step": 0.1, "nominal": 3.33}}),
+            "unknown control": contract(forbidden=[{"all": [{"control": "ghost", "eq": 1}]}]),
+            "cycle": contract(controls={
+                "a": {"type": "boolean", "activeWhen": {"control": "b", "eq": True}},
+                "b": {"type": "boolean", "activeWhen": {"control": "a", "eq": True}}}, forbidden=[]),
+            "unsupported type": contract(controls={"x": {"type": "bitfield"}}),
+            "budget": contract(campaign={"budget": 0}),
+        }
+        for message, bad in cases.items():
+            with self.subTest(message), self.assertRaisesRegex(InvalidRequest, message):
+                propose({"contract": bad})
+        with self.assertRaisesRegex(InvalidRequest, "either contract or setup"):
+            propose({"contract": contract(), "setup": setup()})
+
+    def test_unknown_method_lists_registered_planners(self):
+        with self.assertRaisesRegex(InvalidRequest, "grid, random, tpe"):
+            propose({"setup": setup(), "method": "annealing"})
+
+
 if __name__ == "__main__":
     unittest.main()
