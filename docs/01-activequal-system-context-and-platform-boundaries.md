@@ -31,6 +31,19 @@ The document uses these labels so that verified stack conventions are not confus
 - **ActiveQual decision:** Proposed as the implementation direction for the 12-week project.
 - **Open decision:** Requires a later spike, hardware inventory, or team decision.
 
+## 2.1 Stack amendment
+
+**ActiveQual decision (supersedes the Kotlin/JVM, gRPC and BFF statements elsewhere in this document):**
+
+- Backend, Agent, Decision, Oracle, Controller, and Adapter are implemented in **Python**. The Decision Service must be Python because the planners depend on Optuna and, for GP-BO, torch.
+- The MVP deploys as **two Python processes** plus the web UI: a **control-plane process** (Backend, Agent, Decision, Oracle as separate modules) and a **bench process** (Controller, bench-side safety validator, Adapter). The bench process stays separate so it can shut the fixture down safely if the control plane fails, and it pulls approved work instead of accepting inbound connections.
+- The Console is a **Next.js** application. Its server-side route handlers play the backend-for-frontend role. There is **no separate BFF service**.
+- One safety-rule library is shared by Backend and Controller so the two checks cannot drift apart.
+
+**Recommended, to be confirmed in HLD 05 and HLD 08:** HTTP/JSON between processes, a framed serial protocol to the test controller (HLD 02 §8.3), and SQLite behind a repository interface.
+
+Statements below that mention Kotlin/JVM, protobuf/gRPC between services, a BFF Service, JPA, Liquibase, or PostgreSQL describe the earlier plan and are superseded by this amendment. Section 18 records the reference repository that plan was modelled on, not ActiveQual's stack.
+
 ## 3. Product boundary
 
 ### 3.1 Problem statement
@@ -49,9 +62,9 @@ The first implementation contains:
 - a bounded set of parameterized event sequences;
 - voltage, current, heartbeat/reset, workload, timing, and external OLED observations;
 - one disclosed seeded interaction fault with hidden parameters during search;
-- random, fixed/corner, space-filling, pairwise, and one adaptive planner;
+- random, fixed/corner, space-filling, and pairwise baselines, and two adaptive planners (multivariate TPE and GP-BO);
 - failure confirmation and basic failure minimization;
-- a local Console, BFF Service, Backend Service, Agent Service, Decision Service, Controller Service, Adapter Service, and database using the selected stack;
+- a local Console, Backend Service, Agent Service, Decision Service, Controller Service, Adapter Service, and database (see the stack amendment in section 2.1);
 - deterministic software safety validation, local instrument limits, a watchdog, and a physical emergency cutoff.
 
 ### 3.3 Stretch scope
@@ -77,7 +90,7 @@ The MVP does not:
 
 ## 4. Architecture principles
 
-1. **Use the selected stack for application software.** APIs use protobuf and gRPC; backend, agent, decision, controller, and adapter services use Kotlin/JVM; persistence uses JPA and Liquibase; the frontend uses React, Next.js, TypeScript, and the existing design-system conventions.
+1. **Use one language for application services.** Backend, agent, decision, controller, and adapter services use Python and share one safety-rule library; the frontend uses React, Next.js, and TypeScript. See section 2.1.
 2. **Keep the DUT separate from the test controller.** A DUT crash must not prevent ActiveQual from measuring the crash or removing power.
 3. **Keep safety outside candidate selection.** The Decision Service selects candidates but cannot approve or execute them.
 4. **Validate twice.** The Backend Service validates a proposed episode before making it available, and the Controller Service validates it again immediately before execution.
@@ -123,9 +136,9 @@ flowchart LR
 
 ## 6. Service architecture
 
-**Verified stack pattern:** The current repository uses separate `api`, `model`, optional `storage`, and `service` modules. The frontend uses Next.js, React, and TypeScript, calls a dedicated BFF, and uses protobuf/gRPC contracts. Backend service classes use coroutine gRPC dispatch and delegate business behavior to focused implementations. The repository also contains a separate Kotlin worker process and JPA/Liquibase persistence.
+**Verified stack pattern:** The current repository uses separate `api`, `model`, optional `storage`, and `service` modules. The frontend uses Next.js, React, and TypeScript, calls a dedicated BFF, and uses protobuf/gRPC contracts. Backend service classes use coroutine gRPC dispatch and delegate business behavior to focused implementations. The repository also contains a separate Kotlin worker process and JPA/Liquibase persistence. ActiveQual does not adopt this stack (section 2.1).
 
-**ActiveQual decision:** Organize ActiveQual into seven named application layers: Console, BFF Service, Backend Service, Agent Service, Decision Service, Controller Service, and Adapter Service. These are responsibility boundaries; they do not all require separate deployment processes in the 12-week MVP. The Decision Service owns algorithm implementations and the common planner interface. The Agent Service owns campaign orchestration and invokes the Decision Service with the campaign context it obtains from Backend.
+**ActiveQual decision:** Organize ActiveQual into six named application layers: Console, Backend Service, Agent Service, Decision Service, Controller Service, and Adapter Service. The Console's server routes provide the browser-facing request shaping that a BFF would. These are responsibility boundaries; they do not all require separate deployment processes in the 12-week MVP. The Decision Service owns algorithm implementations and the common planner interface. The Agent Service owns campaign orchestration and invokes the Decision Service with the campaign context it obtains from Backend.
 
 ```mermaid
 flowchart TB
@@ -134,11 +147,11 @@ flowchart TB
     end
 
     subgraph ApplicationHost[Local Application Processes]
-        BFF[BFF Service]
+        BFF[Console server routes]
         Backend[Backend Service]
         Agent[Agent Service]
         Decision[Decision Service]
-        Store[(PostgreSQL)]
+        Store[(Campaign database)]
         TraceStore[(Local Trace Storage)]
     end
 
@@ -156,8 +169,8 @@ flowchart TB
         DUT[ESP32 DUT]
     end
 
-    UI -->|protobuf RPC through generated client| BFF
-    BFF -->|authenticated gRPC| Backend
+    UI -->|HTTP| BFF
+    BFF -->|HTTP/JSON| Backend
     Backend -->|campaign state and approved episodes| Store
     Backend -->|raw-trace references| TraceStore
     Agent -->|read history, approved domain, config and remaining budget| Backend
@@ -182,7 +195,7 @@ flowchart TB
 
 ```text
 Console
-  -> BFF Service
+  -> Console server routes (no separate BFF service)
   -> Backend Service
        -> Agent Service orchestrates planning and submits proposals
             -> Decision Service selects a candidate and returns its rationale
@@ -195,18 +208,17 @@ The Decision Service implements the common planner interface and candidate-selec
 
 The **Controller Service is required as a logical component** because the Adapter Service alone should not own the experiment sequence. An adapter knows how to perform one instrument-specific action, such as setting a supply voltage or reading a current measurement. The Controller Service knows the complete episode procedure: reset, configure, settle, stimulate, observe, shut down, recover, and submit evidence.
 
-For the MVP, the Controller Service and Adapter Service run in the same local Kotlin/JVM bench process. Keeping them in one process avoids an unnecessary network boundary while preserving separate interfaces and responsibilities. They can be separated later if multiple benches or remote instruments require it.
+For the MVP, the Controller Service and Adapter Service run in the same local Python bench process. Keeping them in one process avoids an unnecessary network boundary while preserving separate interfaces and responsibilities. They can be separated later if multiple benches or remote instruments require it.
 
 ### 6.2 Proposed repository/module map
 
-The exact Gradle inclusion paths will be confirmed during the implementation bootstrap. The intended ownership is:
+The exact package layout will be confirmed during the implementation bootstrap. The intended ownership is:
 
 ```text
 activequal/
-├── model/                 Reusable protobuf domain entities
-├── api/                   Backend gRPC service contract
-├── storage/               JPA entities, repositories and Liquibase changes
-├── service/               Authorization, contract validation and campaign APIs
+├── model/                 Shared domain types, contract schema and the safety-rule library
+├── storage/               Repository interfaces and the campaign database implementation
+├── service/               Backend: authorization, contract validation, campaign APIs and the Oracle
 ├── agent/
 │   └── service/           Campaign orchestration, budget accounting, confirmation and minimization scheduling
 ├── decision/
@@ -216,22 +228,19 @@ activequal/
 ├── adapter/
 │   └── service/           Instrument-neutral interfaces and device-specific drivers
 ├── console/
-│   ├── bff/api/           Browser-facing protobuf contract
-│   ├── bff/service/       Session-aware BFF and backend forwarding
-│   └── ui/                Next.js, React, TypeScript and shared UI components
+│   └── ui/                Next.js, React, TypeScript, and the server routes that call the control plane
 └── firmware/
     ├── test-controller/   Real-time controller firmware
     └── dut/               ESP32 workloads, telemetry and seeded benchmarks
 ```
 
-The Decision Service may initially be a logical module in the Agent worker process; a separate deployed process is not required for the MVP. It has no hardware/control access and no authority to persist campaign state or approve candidates. The firmware modules are the unavoidable exception to Kotlin/JVM application code because they run directly on microcontrollers. They still communicate through versioned, bounded message contracts.
+The Decision Service may initially be a logical module in the Agent worker process; a separate deployed process is not required for the MVP. It has no hardware/control access and no authority to persist campaign state or approve candidates. The firmware modules are the unavoidable exception to Python application code because they run directly on microcontrollers. They still communicate through versioned, bounded message contracts.
 
 ### 6.3 Service responsibilities
 
 | Service | Owns | Must not own |
 |---|---|---|
-| Console | Contract review, campaign controls, live status, maps, and evidence presentation | Instrument commands, safety decisions, planner internals |
-| BFF Service | Browser session context, user-facing request shaping, forwarding, and UI-safe error translation | Physical execution, campaign scheduling, durable scientific data |
+| Console | Contract review, campaign controls, live status, maps, and evidence presentation; its server routes handle browser session context, request shaping, forwarding, and UI-safe error translation | Instrument commands, safety decisions, planner internals, physical execution, durable scientific data |
 | Backend Service | Authorization, durable campaign state, contract/version management, episode leases, result acceptance, and the deterministic Oracle that classifies submitted evidence against the approved contract | USB/serial drivers, sub-millisecond timing, direct rail control |
 | Agent Service | Campaign planning lifecycle, loading history/domain/configuration/budget context, invoking Decision Service, submitting proposals for durable Backend recording, budget accounting, failure confirmation, and minimization scheduling | Implementing candidate-selection algorithms, approving proposals, instrument access, final safety authority |
 | Decision Service | Common planner interface and baseline/adaptive candidate-selection algorithms; returns a candidate with rationale for the supplied campaign context | Campaign lifecycle or budget ownership, persistence, contract/safety approval, instrument access, or hardware control |
@@ -247,10 +256,8 @@ In this document, “service” describes a component with a clear interface and
 
 | Deployment process | Components inside it for the MVP |
 |---|---|
-| Web process | Console |
-| BFF process | BFF Service |
-| Backend process | Backend Service |
-| Agent worker process | Agent Service and, initially, the Decision Service module |
+| Web process | Console (UI and server routes) |
+| Control-plane process | Backend Service, Agent Service, Decision Service, and the Oracle, as separate modules |
 | Local bench process | Controller Service, bench-side safety validator, and Adapter Service |
 | Microcontroller firmware | Test-controller firmware |
 
@@ -258,7 +265,7 @@ In this document, “service” describes a component with a clear interface and
 
 The most important system boundary separates the **control plane** from the **bench plane**.
 
-- The **control plane** contains the Console, BFF Service, Backend Service, Agent Service, Decision Service, persistence, and reports. The Decision Service selects a candidate; Agent orchestrates the campaign, submits proposals, and handles lifecycle work. Backend records authoritative campaign state and validates candidates.
+- The **control plane** contains the Console, Backend Service, Agent Service, Decision Service, persistence, and reports. The Decision Service selects a candidate; Agent orchestrates the campaign, submits proposals, and handles lifecycle work. Backend records authoritative campaign state and validates candidates.
 - The **bench plane** contains the Controller Service, Adapter Service, test-controller MCU, instruments, sensors, interlock, and DUT. It decides whether an already approved experiment can be executed on the currently connected fixture and performs the physical operation.
 
 The control plane can request an experiment such as:
@@ -291,7 +298,7 @@ The Agent Service supplies measured history and classified outcomes to the Decis
 sequenceDiagram
     actor Researcher
     participant UI as Web UI
-    participant BFF as BFF Service
+    participant BFF as Console server routes
     participant API as Backend Service
     participant W as Agent Service
     participant D as Decision Service
@@ -354,9 +361,9 @@ No single software component is sufficient to make an unsafe candidate physicall
 
 ## 10. Identity and scope
 
-**Verified stack pattern:** Public API contracts use `project_id`; database entities use `company_id` where required by existing storage conventions. Browser calls pass through a session-aware BFF, while backend services enforce project-scoped authorization.
+**Verified stack pattern:** Public API contracts use `project_id`; database entities use `company_id` where required by existing storage conventions. Browser calls pass through a session-aware BFF, while backend services enforce project-scoped authorization. ActiveQual keeps the same split, with the Console server routes in the BFF role.
 
-**ActiveQual decision:** Every durable ActiveQual entity is project-scoped. The BFF supplies authenticated caller context, and the backend verifies access for every campaign, contract, fixture, episode, and evidence read.
+**ActiveQual decision:** Every durable ActiveQual entity is project-scoped. The Console server routes supply authenticated caller context, and the backend verifies access for every campaign, contract, fixture, episode, and evidence read.
 
 The Controller Service is not a human browser session. It requires a separately provisioned machine identity bound to:
 
@@ -389,7 +396,7 @@ The Controller Service may keep a local recovery spool while disconnected. Local
 | Failure | Required high-level behavior |
 |---|---|
 | Browser closes | Campaign continues only if already armed and allowed by the researcher policy; UI can reconnect and read durable state |
-| BFF restarts | No physical authority is lost or gained; browser retries status reads |
+| Console server restarts | No physical authority is lost or gained; browser retries status reads |
 | Backend unavailable | Controller Service finishes only the currently leased bounded episode if safe, shuts down outputs, spools evidence, and claims no new work |
 | Agent Service fails | No new episode is proposed; current persisted episode state remains inspectable |
 | Decision Service is unavailable or returns no valid candidate | Agent does not submit a proposal; campaign remains inspectable and may resume after the planner failure is resolved |
@@ -405,12 +412,10 @@ All application processes run on one laboratory laptop or workstation for the 12
 
 ```text
 Browser
-  -> ActiveQual Next.js web UI
-  -> ActiveQual Kotlin BFF
-  -> ActiveQual Kotlin backend
-  -> PostgreSQL + local trace storage
-  -> ActiveQual Agent Service worker (including the Decision Service module for the MVP)
-  -> ActiveQual Controller and Adapter bench process
+  -> ActiveQual Next.js web UI and server routes
+  -> ActiveQual Python control-plane process (Backend, Agent, Decision, Oracle)
+  -> campaign database + local trace storage
+  -> ActiveQual Python Controller and Adapter bench process
   -> USB/LAN instruments + test-controller MCU + DUT
 ```
 
@@ -438,14 +443,16 @@ Processes remain separate where the deployment table specifies a boundary, even 
 1. The implementation uses the selected module and technology conventions.
 2. ActiveQual is a bounded project rather than physical-test logic embedded in an unrelated existing service.
 3. The 12-week MVP deploys locally on one laboratory workstation.
-4. The control plane and bench plane communicate through protobuf/gRPC.
-5. The Controller Service is part of a local Kotlin/JVM bench process and pulls approved work using an episode lease.
-6. Microcontroller firmware is the only required non-JVM execution environment.
+4. The control plane and bench plane communicate over a versioned, typed interface; HTTP/JSON is recommended and is confirmed in HLD 05.
+5. The Controller Service is part of a local Python bench process and pulls approved work using an episode lease.
+6. Microcontroller firmware is the only required non-Python execution environment for application services.
 7. Safety validation occurs before persistence as approved work and again at the bench.
-8. PostgreSQL owns campaign metadata; large evidence uses checksummed trace storage.
-9. The first DUT, three rails, bounded event templates, and one adaptive method define the implementation baseline.
+8. A campaign database (SQLite recommended, confirmed in HLD 08) owns campaign metadata; large evidence uses checksummed trace storage.
+9. The first DUT, three rails, bounded event templates, and two adaptive methods (multivariate TPE and GP-BO) with random as the baseline define the implementation baseline. The rail count remains an open hardware decision (see HLD 02).
 10. Candidate-selection algorithms live behind the Decision Service interface; Agent owns campaign lifecycle and can initially host Decision as a logical module in its worker.
-11. **ActiveQual decision:** The Oracle runs inside the Backend Service. The Controller submits measured evidence; Backend classifies it with the reviewed contract rules (HLD 04) so the outcome is computed once, by the component that holds the approved contract version.
+11. **ActiveQual decision:** The stack is Python in two processes plus a Next.js Console with no separate BFF service (section 2.1).
+12. **ActiveQual decision:** Multivariate TPE and GP-BO are the two adaptive planners; random is the baseline every comparison includes.
+13. **ActiveQual decision:** The Oracle runs inside the Backend Service. The Controller submits measured evidence; Backend classifies it with the reviewed contract rules (HLD 04) so the outcome is computed once, by the component that holds the approved contract version.
 
 ## 16. Open decisions and follow-up documents
 
@@ -457,7 +464,7 @@ Processes remain separate where the deployment table specifies a boundary, even 
 | Episode lifecycle and lease transitions | Explicit persisted state machine with idempotent result submission | HLD 03: Episode Execution and Safety State Machine |
 | Test-contract protobuf structure | Typed variables, units, constraints, transitions, oracle rules, and budget | HLD 04: Test Contract and Domain Model |
 | Bench-agent RPC surface | Claim, heartbeat, renew, submit, abort acknowledgement, and fixture health | HLD 05: APIs and Instrumentation Protocols |
-| Decision Service planner interface and first adaptive method | Common candidate-selection interface; mixed-domain active learner using continuous robustness plus failure probability | HLD 06: Planner and Evaluation Design |
+| Decision Service planner interface and adaptive methods | **Decided:** common candidate-selection interface with multivariate TPE and GP-BO as adaptive methods and random as baseline. Open: coverage settings, primary metric, benchmark sizing | HLD 06: Planner and Evaluation Design |
 | Machine authentication | Reuse a verified service identity suitable for the local Controller Service | HLD 07: Security and Deployment |
 | Trace storage mechanism | Local filesystem for MVP behind an interface; object storage later | HLD 08: Persistence and Observability |
 

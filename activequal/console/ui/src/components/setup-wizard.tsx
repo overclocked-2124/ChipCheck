@@ -122,7 +122,7 @@ export function SetupWizard() {
             <Field label="Maximum current (A)" {...props("maxCurrent")} type="number" />
             <Field label="Maximum temperature (°C)" {...props("maxTemperature")} type="number" />
             <Field label="Experiment budget" {...props("experimentBudget")} type="number" />
-            <label className="field"><span>Planner method *</span><select value={draft.plannerMethod} onChange={e => change("plannerMethod", e.target.value as SetupDraft["plannerMethod"])}><option value="tpe">Adaptive TPE</option><option value="random">Uniform random</option><option value="grid">Grid baseline</option></select></label>
+            <label className="field"><span>Planner method *</span><select value={draft.plannerMethod} onChange={e => change("plannerMethod", e.target.value as SetupDraft["plannerMethod"])}><option value="tpe">Adaptive TPE</option><option value="gp">Adaptive GP-BO</option><option value="random">Uniform random</option><option value="grid">Grid baseline</option></select></label>
             <Field label="Planner seed" {...props("plannerSeed")} type="number" />
             <Area label="Reviewed safe return state" {...props("safeState")} hint="Describe output and shutdown order for this fixture" />
           </div>}

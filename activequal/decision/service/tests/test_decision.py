@@ -184,5 +184,38 @@ class ContractTests(unittest.TestCase):
             propose({"setup": setup(), "method": "annealing"})
 
 
+def _gp_available():
+    try:
+        import optuna
+        optuna.samplers.GPSampler(seed=0)
+        return True
+    except ImportError:
+        return False
+
+
+class GPPlannerTests(unittest.TestCase):
+    @unittest.skipUnless(_gp_available(), "optional GP dependencies are not installed")
+    def test_gp_proposes_in_domain_from_measured_history(self):
+        base = propose({"contract": contract(), "method": "random", "seed": 4, "count": 8})["tests"]
+        history = [{"conditions": item["conditions"], "outcome": "PASS", "robustness": 0.2 + index / 20}
+                   for index, item in enumerate(base)]
+        result = propose({"contract": contract(), "method": "gp", "seed": 4, "warmupTrials": 4,
+                          "history": history, "count": 2})
+        self.assertEqual(result["historyUsed"], 8)
+        self.assertEqual(len(result["tests"]), 2)
+        self.assertIn("GP model selected", result["tests"][0]["reason"])
+        known = [item["conditions"] for item in history]
+        for test in result["tests"]:
+            self.assertNotIn(test["conditions"], known)
+            self.assertIn(test["conditions"]["workload"], {"idle", "oled_refresh", "flash_write"})
+
+    def test_missing_gp_dependencies_give_a_clear_error(self):
+        import optuna
+        from unittest import mock
+        with mock.patch.object(optuna.samplers, "GPSampler", side_effect=ImportError("torch")):
+            with self.assertRaisesRegex(InvalidRequest, "requirements-gp.txt"):
+                propose({"setup": setup(), "method": "gp"})
+
+
 if __name__ == "__main__":
     unittest.main()

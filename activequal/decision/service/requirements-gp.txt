@@ -1,0 +1,5 @@
+# Optional: needed only for method "gp". The CPU wheel avoids pulling ~3 GB of CUDA libraries.
+--extra-index-url https://download.pytorch.org/whl/cpu
+-r requirements.txt
+torch>=2.2
+scipy>=1.11
