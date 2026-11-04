@@ -165,7 +165,7 @@ flowchart TB
     Decision -->|candidate and rationale| Agent
     Agent -->|submit candidate proposal| Backend
     ControllerService -->|claim approved episode lease| Backend
-    ControllerService -->|submit observations and outcome| Backend
+    ControllerService -->|submit observations and evidence| Backend
     ControllerService --> BenchSafety
     BenchSafety -->|validated execution plan| Adapter
     Adapter <--> ControllerMCU
@@ -232,10 +232,10 @@ The Decision Service may initially be a logical module in the Agent worker proce
 |---|---|---|
 | Console | Contract review, campaign controls, live status, maps, and evidence presentation | Instrument commands, safety decisions, planner internals |
 | BFF Service | Browser session context, user-facing request shaping, forwarding, and UI-safe error translation | Physical execution, campaign scheduling, durable scientific data |
-| Backend Service | Authorization, durable campaign state, contract/version management, episode leases, result acceptance | USB/serial drivers, sub-millisecond timing, direct rail control |
+| Backend Service | Authorization, durable campaign state, contract/version management, episode leases, result acceptance, and the deterministic Oracle that classifies submitted evidence against the approved contract | USB/serial drivers, sub-millisecond timing, direct rail control |
 | Agent Service | Campaign planning lifecycle, loading history/domain/configuration/budget context, invoking Decision Service, submitting proposals for durable Backend recording, budget accounting, failure confirmation, and minimization scheduling | Implementing candidate-selection algorithms, approving proposals, instrument access, final safety authority |
 | Decision Service | Common planner interface and baseline/adaptive candidate-selection algorithms; returns a candidate with rationale for the supplied campaign context | Campaign lifecycle or budget ownership, persistence, contract/safety approval, instrument access, or hardware control |
-| Controller Service | Fixture checks, final candidate validation, episode state machine, lease execution, safe recovery, and result submission | Inventing tests, widening limits, or containing vendor-specific instrument commands |
+| Controller Service | Fixture checks, final candidate validation, episode state machine, lease execution, safe recovery, and submission of measured evidence (not the final outcome) | Inventing tests, widening limits, or containing vendor-specific instrument commands |
 | Adapter Service | Translation between generic rail/measurement operations and vendor-specific USB, serial, LAN, or instrument APIs | Selecting experiments, campaign state, safety-policy ownership, or deciding the episode sequence |
 | Test-controller firmware | Deterministic event timing, watchdog heartbeat, immediate local shutdown signalling | Research planning, long-term persistence, UI logic |
 | Hardware interlock | Independent cutoff on E-stop/watchdog/protection trip | Functional pass/fail decisions or search logic |
@@ -445,6 +445,7 @@ Processes remain separate where the deployment table specifies a boundary, even 
 8. PostgreSQL owns campaign metadata; large evidence uses checksummed trace storage.
 9. The first DUT, three rails, bounded event templates, and one adaptive method define the implementation baseline.
 10. Candidate-selection algorithms live behind the Decision Service interface; Agent owns campaign lifecycle and can initially host Decision as a logical module in its worker.
+11. **ActiveQual decision:** The Oracle runs inside the Backend Service. The Controller submits measured evidence; Backend classifies it with the reviewed contract rules (HLD 04) so the outcome is computed once, by the component that holds the approved contract version.
 
 ## 16. Open decisions and follow-up documents
 
