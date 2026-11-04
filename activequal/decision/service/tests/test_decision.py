@@ -212,9 +212,59 @@ class GPPlannerTests(unittest.TestCase):
     def test_missing_gp_dependencies_give_a_clear_error(self):
         import optuna
         from unittest import mock
-        with mock.patch.object(optuna.samplers, "GPSampler", side_effect=ImportError("torch")):
-            with self.assertRaisesRegex(InvalidRequest, "requirements-gp.txt"):
-                propose({"setup": setup(), "method": "gp"})
+        with mock.patch.object(optuna.samplers, "GPSampler", side_effect=ImportError("torch")), \
+                self.assertRaisesRegex(InvalidRequest, "requirements-gp.txt"):
+            propose({"setup": setup(), "method": "gp"})
+
+
+class FallbackTests(unittest.TestCase):
+    """A model that only ever proposes an executed point must not starve the caller."""
+
+    @staticmethod
+    def stuck_planner(fallback):
+        import optuna
+        from planners.base import OptunaPlanner
+
+        class Stuck(optuna.samplers.BaseSampler):
+            def infer_relative_search_space(self, study, trial):
+                return {}
+
+            def sample_relative(self, study, trial, search_space):
+                return {}
+
+            def sample_independent(self, study, trial, name, dist):
+                return dist.choices[0] if hasattr(dist, "choices") else dist.low
+
+        class StuckPlanner(OptunaPlanner):
+            name = "stuck"
+            fallback_to_random = fallback
+
+            def make_sampler(self, domain, seed, config):
+                return Stuck()
+
+            def reason(self, trained, config):
+                return "stuck model"
+
+            def ask_limit(self, seen_count, count):
+                return 3 * count + 1
+        return StuckPlanner()
+
+    def run(self, fallback):
+        from domain import domain_from_contract, parse_history
+        domain = domain_from_contract(contract())
+        first = self.stuck_planner(False).propose(domain, [], 1, 0, {})
+        history = parse_history(domain, [{"conditions": first[0].conditions, "outcome": "PASS", "robustness": 0.5}])
+        return first[0].conditions, self.stuck_planner(fallback).propose(domain, history, 2, 0, {})
+
+    def test_without_fallback_the_caller_is_starved(self):
+        _, proposals = self.run(False)
+        self.assertEqual(proposals, [])
+
+    def test_fallback_fills_with_unseen_points_and_says_so(self):
+        executed, proposals = self.run(True)
+        self.assertEqual(len(proposals), 2)
+        self.assertNotIn(executed, [p.conditions for p in proposals])
+        self.assertIn("fallback", proposals[0].reason)
 
 
 if __name__ == "__main__":

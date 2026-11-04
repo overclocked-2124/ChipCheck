@@ -7,6 +7,7 @@ this package and register it in ``planners/__init__.py``.
 
 from __future__ import annotations
 
+import time
 from typing import Any, Protocol
 
 import optuna
@@ -28,6 +29,15 @@ class OptunaPlanner:
     """Shared loop for planners backed by an Optuna sampler."""
 
     name = "base"
+    # A model-based sampler can keep returning a point that was already executed. When
+    # this is set, the remaining slots are filled with random unseen points (and the
+    # reason says so) instead of returning too few candidates.
+    fallback_to_random = False
+    deadline_seconds: float | None = None
+    fallback_reason = "Model proposed only already-executed points; random unseen fallback"
+
+    def ask_limit(self, seen_count: int, count: int) -> int:
+        return seen_count + max(50, count * 50)
 
     def make_sampler(self, domain: SearchDomain, seed: int, config: dict[str, Any]) -> optuna.samplers.BaseSampler:
         raise NotImplementedError
@@ -56,8 +66,11 @@ class OptunaPlanner:
 
         proposals: list[CandidateProposal] = []
         reason = self.reason(trained, config)
-        attempts, limit = 0, len(seen) + max(50, count * 50)
+        attempts, limit = 0, self.ask_limit(len(seen), count)
+        started = time.monotonic()
         while len(proposals) < count and attempts < limit:
+            if self.deadline_seconds is not None and time.monotonic() - started > self.deadline_seconds:
+                break
             attempts += 1
             try:
                 trial = study.ask(fixed_distributions=domain.distributions)
@@ -69,4 +82,19 @@ class OptunaPlanner:
                 continue
             seen.add(key)
             proposals.append(CandidateProposal(f"candidate-{len(proposals) + 1}", conditions, reason))
+        if self.fallback_to_random and len(proposals) < count:
+            self._fill_random(domain, seen, proposals, count, seed + len(history))
         return proposals
+
+    def _fill_random(self, domain: SearchDomain, seen: set[tuple[Any, ...]],
+                     proposals: list[CandidateProposal], count: int, seed: int) -> None:
+        study = optuna.create_study(sampler=optuna.samplers.RandomSampler(seed=seed + 7919))
+        attempts, limit = 0, len(seen) + max(50, count * 50)
+        while len(proposals) < count and attempts < limit:
+            attempts += 1
+            conditions = canonical(domain, study.ask(fixed_distributions=domain.distributions).params)
+            key = condition_key(conditions)
+            if key in seen or is_forbidden(domain, conditions):
+                continue
+            seen.add(key)
+            proposals.append(CandidateProposal(f"candidate-{len(proposals) + 1}", conditions, self.fallback_reason))

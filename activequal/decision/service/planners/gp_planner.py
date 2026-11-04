@@ -18,6 +18,13 @@ class GPPlanner(OptunaPlanner):
     """
 
     name = "gp"
+    fallback_to_random = True
+    deadline_seconds = 10.0  # keep below the console route timeout (15 s)
+    fallback_reason = "GP proposed only already-executed points; random unseen fallback"
+
+    def ask_limit(self, seen_count, count):
+        # Repeated asks rarely change a stuck GP's answer and each costs seconds.
+        return 3 * count + 1
 
     def make_sampler(self, domain, seed, config):
         try:

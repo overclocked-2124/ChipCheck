@@ -160,10 +160,10 @@ def _control(name: str, spec: Any) -> Control:
                        spec.get("activeWhen"))
     if kind == "categorical":
         values = options(spec.get("values"), f"{name}.values")
-        nominal = str(spec.get("nominal", values[0])).strip().lower()
-        if nominal not in values:
+        choice = str(spec.get("nominal", values[0])).strip().lower()
+        if choice not in values:
             raise InvalidRequest(f"{name}.nominal must be one of its values")
-        return Control(name, kind, optuna.distributions.CategoricalDistribution(values), nominal,
+        return Control(name, kind, optuna.distributions.CategoricalDistribution(values), choice,
                        spec.get("activeWhen"))
     raise InvalidRequest(f"control {name} has unsupported type {kind!r}")
 
@@ -174,8 +174,10 @@ def _finite_values(control: Control) -> list[Any]:
         return list(dist.choices)
     if isinstance(dist, optuna.distributions.IntDistribution):
         return list(range(dist.low, dist.high + 1, dist.step))
+    assert isinstance(dist, optuna.distributions.FloatDistribution) and dist.step is not None
     from decimal import Decimal
-    values, current = [], Decimal(str(dist.low))
+    values: list[Any] = []
+    current = Decimal(str(dist.low))
     while current <= Decimal(str(dist.high)) and len(values) <= 10000:
         values.append(float(current))
         current += Decimal(str(dist.step))
@@ -191,12 +193,13 @@ def _check_activation(controls: dict[str, Control]) -> None:
         if control.active_when["control"] == name:
             raise InvalidRequest(f"{name}.activeWhen cannot refer to itself")
     for start in controls:  # cycle check over the activeWhen dependency graph
-        seen, current = set(), start
-        while controls[current].active_when is not None:
+        seen: set[str] = set()
+        current = start
+        while (atom := controls[current].active_when) is not None:
             if current in seen:
                 raise InvalidRequest("activeWhen dependencies form a cycle")
             seen.add(current)
-            current = controls[current].active_when["control"]
+            current = atom["control"]
 
 
 def domain_from_contract(contract: Any) -> SearchDomain:
