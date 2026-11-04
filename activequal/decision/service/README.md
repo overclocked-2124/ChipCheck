@@ -11,6 +11,14 @@ python -m venv .venv
 .venv/bin/python decision.py
 ```
 
+## Request shapes and planners
+
+A request carries either a test `contract` (`contractVersion: 2`, preferred) or the console's legacy `setup` payload, never both. Both become one search domain built from the declared controls (`continuous`, `integer`, `duration`, `boolean`, `categorical`). A control may declare `activeWhen`, and while it is inactive it is pinned to its `nominal` value. `forbidden` rules (`{"all": [...]}` predicates) are used only to avoid wasted proposals; Backend and Controller remain the authoritative checks.
+
+Planners live in `planners/` behind `PLANNER_REGISTRY` (`tpe`, `random`, `grid`). TPE is multivariate and grouped. The sampler seed advances with the amount of history, and every executed, invalid or aborted point is remembered so it is never proposed again. To add an algorithm, add a file in `planners/` and register it.
+
+## Endpoint
+
 The local HTTP endpoint is `POST http://127.0.0.1:8001/v1/proposals`. The BFF sends setup controls and optionally previous measured results. `CHIPCHECK_DECISION_HOST` and `CHIPCHECK_DECISION_PORT` change the listener. Keep it on loopback for the current local deployment.
 
 The current console asks for startup proposals. Adaptive TPE proposals require previous measured `PASS` or `DUT_FAILURE` results and a numeric robustness score from the Backend/Oracle path. This service does not invent those measurements.
