@@ -21,11 +21,12 @@ The common interface is `propose(domain, history, count, seed, config) -> candid
 | `grid` | Baseline for small spaces (at most 10,000 points) | Built |
 | `tpe` | Multivariate, grouped Optuna TPE | Built; adaptive method, no heavy dependencies |
 | `gp` | Optuna GP-BO with bounded asks and a random fallback | Built; adaptive method, needs the optional torch dependency |
-| coverage | Pairwise covering array plus space-filling voltages | Evaluated as an Agent-level phase; not a planner yet |
+| coverage | Pairwise covering array plus space-filling voltages | Evaluated as an Agent-level phase; must become a planner so it uses the common interface (HLD 01 CTX-09) |
+| fixed/corner | Nominal point and reviewed corners, a human-style fixed plan | **Not built.** Required as a baseline by HLD 01 §3.2, and the PRD exit criteria require beating it |
 
 **ActiveQual decision (HLD 01, decision 12):** multivariate TPE and GP-BO are the adaptive methods, random the baseline. The evidence in §3 supports keeping both: neither dominates the other.
 
-Inputs never include the seeded fault trigger. Only `PASS` and `DUT_FAILURE` train a planner; invalid and aborted points are remembered so they are never proposed again (HLD 03 §5).
+Inputs never include the seeded fault trigger. Only `PASS` and `DUT_FAILURE` train a planner; invalid and aborted points are remembered so the planner never proposes them again (HLD 03 §5). A deliberate retry of such a point is not a planner proposal: the Agent schedules it as a new linked episode under the retry policy (HLD 03 §17.2), so a spurious invalid result cannot hide a failing point.
 
 ## 3. Planner comparison
 
@@ -77,7 +78,7 @@ Discovery within 30 episodes.
 
 ## 5. Benchmark sizing
 
-How wide must a seeded island be? TPE and random across island widths and measurement noise (300 campaigns per cell, discovery within 30 / 50 episodes):
+How wide must a seeded island be? TPE and random (GP-BO was not part of this sweep) across island widths and measurement noise (300 campaigns per cell, discovery within 30 / 50 episodes):
 
 | Failing voltages | TPE, σ = 2.5 ms | TPE, σ = 10 ms | Random |
 |---:|---|---|---|
@@ -117,7 +118,7 @@ The HLD 04 §14 verification phase was simulated on discovered failures (2,000 p
 | Plus necessity probes | 99% | 100% | **100%** | 88% | 13 / 14 |
 | Majority of 3 per step, budget 40 | 98% | 100% | 0% | 98% | 22 / 24 |
 | Single, σ = 10 ms | 91% | 100% | 0% | 29% | 12 / 14 |
-| Wide island, budget 16 | 99% | 100% | 0% | 92% (72% ran out of budget) | 16 / 16 |
+| Wide island, budget 16 | 99% | 100% | 0% | 92% (47% ran out of budget; 72% with probes) | 16 / 16 |
 | Wide island, budget 20 | — | — | — | 91% (0% ran out) | 17 / 18 |
 
 - Minimizing toward nominal never shows that a condition already at its nominal value is necessary. One **necessity probe** per such discrete control fixes this for about one extra episode.
@@ -140,7 +141,9 @@ Statistical power, TPE vs random, at α = 0.05 (bootstrap from the simulated cam
 
 Each cell is discovery-rate test / log-rank. Log-rank was more powerful in every cell. The budget matters as much as the sample size.
 
-**Recommended:** budget 50 for the discovery pool and 20 campaigns per planner per benchmark on hardware. That gives about 95% power on the narrow island and costs roughly 3–5 hours of bench time per comparison at 6–10 s per episode, including verification.
+These figures compare TPE with random. TPE and GP-BO differ by less on some benchmarks, so comparing the two adaptive methods with each other needs more campaigns than this.
+
+**Recommended:** budget 50 for the discovery pool and 20 campaigns per planner per benchmark on hardware. That gives about 95% power on the narrow island and costs roughly 3–5 hours of bench time per comparison at 6–10 s per episode, including verification. With three planners (random, TPE, GP-BO) that is roughly 4.5–7.5 hours per benchmark.
 
 ## 9. Pre-registration checklist
 
@@ -174,6 +177,7 @@ No planner tuning on held-out benchmarks after results are seen (PRD §21.7).
 | Demo benchmark | Wide disclosed island at a 50-episode budget (§5) |
 | Verification budget and necessity probes | 24 episodes with probes (§7) |
 | Benchmark harness | Move the evaluation harness into the repository as the simulator adapter and benchmark CLI (HLD 10, WP3) |
+| MVP baselines (fixed/corner, space-filling, pairwise) | Build fixed/corner and coverage planners (HLD 10, WP3), or amend HLD 01 §3.2 and the PRD exit criteria |
 
 ## 12. Change log
 

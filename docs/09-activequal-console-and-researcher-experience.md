@@ -68,7 +68,7 @@ Adapted from PRD §18.1, using the evidence from HLD 06:
 
 1. Show the contract and limits, and state that the planner cannot change them.
 2. Explain the interaction space and why one voltage sweep is not the point.
-3. Run the disclosed seeded benchmark. **Recommended:** the wide-island demo configuration at a 50-episode budget, where TPE found the failure within 50 episodes in about 99% of simulated campaigns; a 30-episode budget on the narrow island would miss in more than half of runs.
+3. Run the disclosed seeded benchmark. **Recommended:** the wide-island demo configuration at a 50-episode budget, where TPE found the failure within 50 episodes in about 99% of simulated campaigns; on the narrow island at a 30-episode budget, TPE missed in about 60% of runs and GP-BO in about 40%.
 4. Show verification: replays, minimization, the bracketed interval.
 5. Show the comparison against random and the honest limits, including that adaptive search does not beat random on a fault with no measurable precursor.
 

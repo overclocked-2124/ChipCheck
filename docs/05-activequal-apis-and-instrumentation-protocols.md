@@ -76,11 +76,11 @@ Physical operations are never retried automatically (HLD 03 §17).
 | `POST /v1/campaigns` | Create a campaign in `DRAFT` | Body: contract version, fixture, planner, seed, plan |
 | `POST /v1/campaigns/{id}:validate` | `DRAFT` → `VALIDATING` → `READY` or back | Returns structured reasons on failure |
 | `POST /v1/campaigns/{id}:arm` / `:start` / `:pause` / `:resume` / `:abort` / `:disarm` | Researcher actions | Each carries `campaignVersion`; transitions per HLD 03 §6 |
-| `POST /v1/campaigns/{id}:clear-lockout` | Record lockout review | Requires physical-presence confirmation (HLD 07 §6) |
+| `POST /v1/campaigns/{id}:clear-lockout` | Record lockout review | Requires physical-presence confirmation (HLD 07 §7) |
 | `GET /v1/campaigns/{id}` | Campaign state, budget, counts | |
 | `GET /v1/campaigns/{id}/events` | Server-sent events stream | State transitions, episode phases, outcomes |
 | `GET /v1/episodes/{id}` | Episode record | Requested and measured values kept separate |
-| `POST /v1/proposals:preview` | Unapproved candidate preview | Current console wizard path; never creates episodes |
+| `POST /v1/proposals` | Unapproved candidate preview (the Decision HTTP form, §6) | Current console wizard path; never creates episodes |
 
 ## 6. Agent and Decision Service
 
@@ -97,10 +97,10 @@ Agent submits a returned candidate with `POST /v1/campaigns/{id}/candidates` (in
 
 | Method and path | Purpose | Idempotency |
 |---|---|---|
-| `POST /v1/bench/claim` | Claim the next `AVAILABLE` episode for `fixtureId`; returns lease, candidate, `contractHash`, deadlines, or `204` if none | Server-side atomic claim; lease ID is the key |
+| `POST /v1/bench/claim` | `ClaimNextEpisode` in HLD 03 §10. Claim the next `AVAILABLE` episode for `fixtureId`; returns lease, candidate, `contractHash`, deadlines, or `204` if none | Server-side atomic claim; lease ID is the key |
 | `POST /v1/bench/leases/{leaseId}:heartbeat` | Extend the lease, report phase; response carries pending `abort` or `pause` requests | Safe to repeat |
 | `POST /v1/bench/leases/{leaseId}:abort-ack` | Confirm the bench reached shutdown after an abort | Safe to repeat |
-| `POST /v1/bench/episodes/{episodeId}/results` | Submit observations, events, trace manifest | `episodeId + attempt + manifestHash` |
+| `POST /v1/bench/episodes/{episodeId}/results` | `SubmitEpisodeResult` in HLD 03 §10. Submit observations, events, trace manifest | `episodeId + attempt + manifestHash` |
 | `PUT /v1/bench/traces/{sha256}` | Upload a raw trace by content hash | Content hash |
 | `POST /v1/bench/health` | Fixture health (E-stop, interlock, watchdog, adapter capabilities) | Safe to repeat |
 
@@ -112,7 +112,7 @@ The bench submits **evidence, not outcomes**. The Oracle in Backend classifies t
 {
   "episodeId": "…", "attempt": 1, "leaseId": "…", "contractHash": "…", "fixtureId": "bench-A",
   "requested": {"oledRailV": 3.24, "redLed": true, "greenLed": false, "workload": "oled_refresh"},
-  "measured": {"measuredOledRailV": {"value": 3.238, "uncertainty": 0.005}, "oledLatencyMs": {"value": 151, "uncertainty": 2.5}},
+  "measured": {"measuredOledRailV": {"value": 3.238, "uncertainty": 0.01}, "oledLatencyMs": {"value": 151, "uncertainty": 5}},
   "quality": {"complete": true, "railSettled": true, "instrumentFault": false, "timeouts": []},
   "events": [{"type": "OUTPUT_ENABLE", "controllerTimeMs": 1203}],
   "traces": [{"sha256": "…", "mediaType": "application/vnd.apache.parquet", "bytes": 48213}],

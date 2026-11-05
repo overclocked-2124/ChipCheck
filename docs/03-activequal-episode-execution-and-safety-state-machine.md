@@ -674,7 +674,7 @@ Errors cannot appear only in logs. A researcher must be able to understand why a
 |---|---|
 | Exact contract fields and constraint representation | HLD 04: Test Contract and Domain Model |
 | Exact RPC messages for claims, leases, heartbeats, and result submission | HLD 05: APIs and Instrumentation Protocols |
-| Oracle rules and adaptive-model update contract | HLD 06: Planner and Evaluation Design |
+| Oracle rules and adaptive-model update contract | HLD 06: Adaptive Search and Research Evaluation |
 | Machine identity and credential lifecycle | HLD 07: Security and Deployment |
 | Database tables, trace manifests, metrics, and logs | HLD 08: Persistence and Observability |
 

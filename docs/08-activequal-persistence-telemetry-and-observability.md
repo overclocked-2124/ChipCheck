@@ -33,10 +33,11 @@ Optuna studies are not a store of record. The Decision Service rebuilds its mode
 
 | Entity | Key fields |
 |---|---|
-| `contract_version` | id, version, canonical JSON, `contract_hash`, created_by, approved_by, approved_at |
-| `fixture` | id, revision, registered capabilities, current `calibration_id` |
+| `project` | id, name; every entity below belongs to exactly one project (HLD 01 §10) |
+| `contract_version` | id, project_id, version, canonical JSON, `contract_hash`, created_by, approved_by, approved_at |
+| `fixture` | id, project_id, revision, registered capabilities, current `calibration_id` |
 | `calibration` | id, fixture_id, per-channel gain/offset, uncertainty, meter identity, operator, date |
-| `campaign` | id, state, `version` (optimistic concurrency), contract_version, fixture, planner method, planner config, seed, plan (HLD 04 §14), budgets, software version |
+| `campaign` | id, project_id, state, `version` (optimistic concurrency), contract_version, fixture, planner method, planner config, seed, plan (HLD 04 §14), budgets, software version |
 | `candidate` | id, campaign, planner_sequence, conditions, planner reason, state, rejection reason |
 | `episode` | id, campaign, candidate, attempt, lifecycle state, outcome, linked_episode (for replays), role (`discovery`, `confirm`, `minimize`, `bracket`, `necessity_probe`) |
 | `lease` | id, episode, controller instance, fixture, issued_at, expires_at, last_heartbeat_at, contract_hash |
@@ -46,6 +47,8 @@ Optuna studies are not a store of record. The Decision Service rebuilds its mode
 | `trace` | sha256, episode, media type, bytes, capture metadata, storage path |
 | `counterexample` | id, original episode, minimized conditions, bracketed intervals with resolution, reproduction count and rate, seeded/natural/unknown |
 
+Candidates, episodes, leases, observations, verdicts, events, traces and counterexamples inherit their project through their campaign; every read checks it (HLD 01 §10).
+
 The `role` field on `episode` lets every report separate the discovery budget from the verification budget (HLD 04 §14), which the research metrics depend on (HLD 06).
 
 ## 5. Episode record example
@@ -54,12 +57,12 @@ The `role` field on `episode` lets every report separate the discovery budget fr
 {
   "episodeId": "e42", "campaignId": "c7", "attempt": 1, "role": "discovery",
   "requested": {"oledRailV": 3.24, "redLed": true, "greenLed": false, "workload": "oled_refresh"},
-  "measured": {"measuredOledRailV": {"value": 3.238, "uncertainty": 0.005},
-               "oledLatencyMs": {"value": 151, "uncertainty": 2.5},
-               "maxHeartbeatGapMs": {"value": 203, "uncertainty": 5}, "resetCount": {"value": 0}},
+  "measured": {"measuredOledRailV": {"value": 3.238, "uncertainty": 0.01},
+               "oledLatencyMs": {"value": 151, "uncertainty": 5},
+               "maxHeartbeatGapMs": {"value": 203, "uncertainty": 10}, "resetCount": {"value": 0}},
   "verdict": {"margins": {"latency": -0.35, "heartbeat": 0.99, "reset": 1.0}, "robustness": -0.35,
               "requirements": {"latency": "FAIL", "heartbeat": "PASS", "reset": "PASS"},
-              "outcome": "DUT_FAILURE", "reason": "latency 151 ms > 120 + 2.5 ms"},
+              "outcome": "DUT_FAILURE", "reason": "latency 151 ms > 120 + 5 ms (guard band)"},
   "planner": {"method": "tpe", "reason": "TPE selected this from prior measured robustness"},
   "traces": ["9f2c…"], "contractHash": "…", "fixtureId": "bench-A", "software": "git:7723790"
 }

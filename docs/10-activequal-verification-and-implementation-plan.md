@@ -40,7 +40,7 @@ The control plane and the simulator need no hardware, so L0–L2 can run in clou
 | Safety-rule library | Every HLD 04 rule implemented once and used by both Backend and Controller; complete decision coverage; 10,000 generated invalid candidates produce zero approvals |
 | Backend | HLD 05 §5 and §7 endpoints; HLD 03 transitions with every unlisted transition rejected; idempotency per HLD 05 §8; audit events for every transition |
 | Oracle | HLD 04 §13 Options A and B; classification order per HLD 03 §15.1; tests at each requirement boundary including inconclusive bands |
-| Agent | Campaign loop with discovery and verification pools; verification phase per HLD 04 §14 with necessity probes (HLD 06 §7); stop rules |
+| Agent | Campaign loop with discovery and verification pools; verification phase per HLD 04 §14 (necessity probes and the 24-episode budget pending the decision in HLD 04 §14); stop rules |
 | Decision | Done for the MVP (see §2); remaining: optional coverage planner |
 | Simulator adapter | Implements the `BenchAdapter` interface with the HLD 06 benchmark profiles; under 1 ms per episode |
 | Controller | HLD 03 episode state machine; preflight and live checks; shutdown and cutoff paths; local spool |
@@ -64,7 +64,7 @@ WP5 Thin hardware slice (in parallel from week 1) ── WP9 Serial driver + fir
 | WP0 | Decision Service, contract v2 domain (done) | — |
 | WP1 | Shared safety-rule library | HLD 04 |
 | WP2 | Oracle (Options A and B) | HLD 04 |
-| WP3 | Simulator adapter and benchmark CLI (move the evaluation harness into the repository) | HLD 06 |
+| WP3 | Simulator adapter and benchmark CLI (move the evaluation harness into the repository); fixed/corner and coverage baseline planners required by HLD 01 §3.2 | HLD 06 |
 | WP4 | Backend: contracts, campaigns, candidates, episodes, leases, results, events; SQLite | WP1, WP2, HLD 05, HLD 08 |
 | WP5 | Thin hardware slice: one rail, DUT, real latency read-back; measure noise σ and settling | Parts for one rail |
 | WP6 | Agent loop and verification phase | WP4 |
