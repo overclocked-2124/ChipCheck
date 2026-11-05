@@ -73,11 +73,16 @@ Physical operations are never retried automatically (HLD 03 §17).
 | `POST /v1/contracts` | Create a contract version from canonical JSON | Server validates against HLD 04 §12 and returns `contractId`, `version`, `contractHash` |
 | `POST /v1/contracts/{id}/versions/{v}:approve` | Record reviewer approval | Requires the reviewer role (HLD 07) |
 | `GET /v1/contracts/{id}/versions/{v}` | Read a version | Immutable once approved |
+| `POST /v1/fixtures` | Register a fixture: ID, revision, adapter capabilities | Reviewer only; issues the bench token (HLD 07 §5) |
+| `GET /v1/fixtures/{id}` | Fixture health and current calibration | |
+| `POST /v1/fixtures/{id}/calibrations` | Record a calibration: per-channel gain, offset, uncertainty, meter identity, operator | Arming requires a current calibration (HLD 03 §6.2) |
 | `POST /v1/campaigns` | Create a campaign in `DRAFT` | Body: contract version, fixture, planner, seed, plan |
 | `POST /v1/campaigns/{id}:validate` | `DRAFT` → `VALIDATING` → `READY` or back | Returns structured reasons on failure |
 | `POST /v1/campaigns/{id}:arm` / `:start` / `:pause` / `:resume` / `:abort` / `:disarm` | Researcher actions | Each carries `campaignVersion`; transitions per HLD 03 §6 |
 | `POST /v1/campaigns/{id}:clear-lockout` | Record lockout review | Requires physical-presence confirmation (HLD 07 §7) |
 | `GET /v1/campaigns/{id}` | Campaign state, budget, counts | |
+| `POST /v1/campaigns/{id}/manual-candidates` | Operator-chosen candidate (PRD §18.1 demo) | Same safety validation as planner candidates; reason code `MANUAL` |
+| `GET /v1/campaigns/{id}/export` | Evidence bundle (HLD 08 §6) and generated report | |
 | `GET /v1/campaigns/{id}/events` | Server-sent events stream | State transitions, episode phases, outcomes |
 | `GET /v1/episodes/{id}` | Episode record | Requested and measured values kept separate |
 | `POST /v1/proposals` | Unapproved candidate preview (the Decision HTTP form, §6) | Current console wizard path; never creates episodes |
@@ -87,7 +92,7 @@ Physical operations are never retried automatically (HLD 03 §17).
 **ActiveQual decision (HLD 01):** Decision runs as a module inside the control-plane process for the MVP.
 
 - **In-process call:** `planner.propose(domain, history, count, seed, config) -> list[CandidateProposal]` (implemented in `activequal/decision/service/planners/base.py`).
-- **HTTP form:** `POST /v1/proposals` with body `{contract | setup, method, seed, count, warmupTrials, history}` and response `{source, method, setupName, historyUsed, tests: [{id, conditions, reason}]}`. Kept for the console preview and for out-of-process testing.
+- **HTTP form:** `POST /v1/proposals` with body `{contract | setup, method, seed, count, warmupTrials, history}` and response `{source, method, setupName, historyUsed, tests: [{id, conditions, reason}]}`. Each proposal will also carry a machine-readable `reasonCode` (`STARTUP`, `MODEL`, `FALLBACK`, `BASELINE`, `MANUAL`; NFR-08, HLD 10 WP16). Kept for the console preview and for out-of-process testing.
 - **Determinism:** the same request returns the same response. Per-call sampler seeds are derived by hashing the campaign seed with the history length, so campaigns with nearby seeds stay independent.
 - **Inputs never include** the seeded fault trigger, the private ground-truth marker, or any field outside the contract's public observations.
 
