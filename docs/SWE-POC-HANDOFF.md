@@ -6,6 +6,26 @@
 
 ---
 
+## Status update (2026-11-05)
+
+This guide predates the work below. Where it disagrees with the HLDs, the HLDs win.
+
+| Item | Status |
+|---|---|
+| §3 Decision 1, tech stack | **Decided:** Python in a control-plane process and a bench process, Next.js Console, no separate BFF (HLD 01 §2.1). |
+| §3 Decision 2, structured contract | **Decided:** contract v2 (HLD 04 §12). |
+| §3 Decision 3, robustness | **Decided, with a corrected formula:** Option A normalized headroom for the planner and Option B guard-banded verdict (HLD 04 §13). The formula in §3 below is not bounded to [−1, +1] as claimed. |
+| §3 Decision 4, simulator profiles | Designed. B1 and B2 were simulated during evaluation; the in-memory simulator adapter is not built. |
+| §3 Decision 5, campaign phases | Recorded in HLD 04 §14. Simulation showed the coverage phase and forced exploration do not help; see HLD 06. |
+| §4, three `decision.py` bugs | **Fixed** with regression tests. |
+| §5, planner plugins | Interface and registry built with `tpe`, `gp`, `random`, `grid`. Coverage and staged-hybrid planners not built. In simulation GP-BO beat TPE on two benchmarks and lost on one (HLD 06 §3). |
+| §6, BenchAdapter | Not started. |
+| §7, milestones | Milestone 1 partly done; Milestones 2 to 4 not started. HLD 10 holds the current plan. |
+
+Further defects found and fixed after this guide was written: GP proposal starvation, unbounded memory on huge numeric ranges, unvalidated numeric controls, and correlated random streams between campaigns with nearby seeds.
+
+---
+
 ## 1. Executive Summary & Why This Document Exists
 
 We want to build and validate the entire **ChipCheck (ActiveQual)** software pipeline immediately—without waiting on physical breadboards, RP2040 wiring, or ESP32 firmware. To do that, we need a **pure-software POC** where a deterministic/stochastic **Hardware Bench Simulator** stands in for the physical instruments and Device Under Test (DUT).
@@ -92,6 +112,8 @@ Write down the exact JSON/Protobuf/YAML schema for:
 3. **Structured Telemetry / Observations:** Exact numeric fields returned by an episode (`measuredRailVolts`, `measuredSensorRailVolts`, `measuredCurrentMa`, `oledLatencyMs`, `maxHeartbeatGapMs`, `resetCount`, `bootReason`, `dataQuality`).
 
 ### Decision 3: Lock the Normalized Robustness Math (Oracle Spec)
+
+> **Superseded:** see HLD 04 §13. The margin below is unbounded below (a 251 ms latency against a 120 ms limit gives about −1.09), and the reset margin `−1 × resets` is unbounded too.
 In `SIMPLIFIED-PLAN.md`, the draft scorer computes raw unnormalized differences (`120 - max_lat`, `500 - max_gap`, `-1000 * resets`) and takes `min(scores)`.
 - **Why that breaks ML:** Raw milliseconds (`500`) and millivolts (`30`) have completely different scales. Whichever requirement has the largest numerical unit dominates `min()`, and workloads that don't exercise the OLED appear artificially "safer."
 
@@ -136,6 +158,8 @@ Specify how the **Agent Service** allocates a campaign budget (e.g., $B = 30$ or
 ---
 
 ## 4. Bugs in Current `decision.py` That Must Be Fixed
+
+> **Status:** all three are fixed and covered by regression tests.
 
 When your SWE teammate or agent updates `activequal/decision/service/decision.py`, make sure they fix these specific issues discovered during code review:
 

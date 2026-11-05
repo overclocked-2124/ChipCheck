@@ -1,4 +1,11 @@
 > **Status:** Methodology and alternative implementation proposal. The ActiveQual HLD documents define current service ownership. For the implemented architecture, Decision proposes candidates; Backend and Controller own approval and execution. Values and hardware limits in this document are examples until reviewed for the selected fixture.
+>
+> **Superseded points (2026-11-05):**
+> - Issue 11: level translation is still needed. When a peripheral rail is below the ESP32's 3.3 V signal level, signals can back-power the peripheral (HLD 02 §7).
+> - Issues 18–20: the ₹70 fuse-and-switch safety set is not the baseline; HLD 02 §13 keeps the watchdog, cutoff, and E-stop.
+> - Issue 23: the HLD set remains the structure (HLD 00); this document is a proposal.
+> - Issue 17: HLD 06 recommends a log-rank test on episodes to first failure as the primary metric, because it had more statistical power than discovery rate in every simulated comparison.
+> - Issue 4 is only partly supported: in simulation GP-BO beat TPE on two benchmarks and lost on one, so both are kept as adaptive methods (HLD 06 §3).
 
 # ChipCheck — Solutions to Every Identified Issue
 

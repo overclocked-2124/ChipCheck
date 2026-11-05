@@ -1,4 +1,13 @@
 > **Status:** Methodology and alternative implementation proposal. The ActiveQual HLD documents define current service ownership. For the implemented architecture, Decision proposes candidates; Backend and Controller own approval and execution. Values and hardware limits in this document are examples until reviewed for the selected fixture.
+>
+> **Superseded points (2026-11-05):**
+> - The plain-text serial protocol lacks the framing, checksums, duplicate detection, and explicit rejection HLD 02 §8.3 requires; see HLD 05 §9.
+> - A fuse and a toggle switch are not the safety baseline; HLD 02 §13 keeps the watchdog, hardware cutoff, and E-stop.
+> - The raw-difference scorer is replaced by HLD 04 §13 (normalized headroom for the planner, guard-banded verdict for the outcome).
+> - Fault A is a cliff, not a gradient: inside its window the added delay is already about 100 ms at the edges, so latency jumps from about 31 ms to over 130 ms with no warning outside. HLD 06 §5 defines the benchmark profiles.
+> - The 2.80–3.60 V rail range is below the ESP32-S3 and possibly the SSD1306 recommended supply; limits come from the selected parts (HLD 02 §19.1).
+> - Optuna storage is not the record of campaigns; the Backend database is (HLD 08).
+> - Replays and minimization follow the verification phase in HLD 04 §14 and HLD 06 §7.
 
 # ChipCheck — Simplified Implementation Plan
 

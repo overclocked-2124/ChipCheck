@@ -413,6 +413,10 @@ The required behavior is:
 7. Researcher inspects the fixture and manually resets the interlock.
 8. Campaign returns to `DRAFT`; it is not automatically re-armed.
 
+**Open decision: resuming after a lockout.** Returning to `DRAFT` discards the campaign's place in its budget, which breaks the research accounting for a campaign that tripped once for a fixture reason.
+
+**Recommended:** keep the safety behavior above (no automatic re-arm, physical review required). After review, allow the researcher to create a *continuation* campaign that links to the locked-out one, inherits its history and remaining budget, and must pass validation and arming again. A continuation is allowed only if the contract, fixture, firmware, and calibration hashes are unchanged; otherwise a new campaign starts. Reports present the two as one campaign with a recorded lockout gap.
+
 ## 14. Pause, abort, and disarm
 
 These actions are intentionally different.
@@ -567,6 +571,25 @@ Every wait is bounded and configured by the reviewed contract or fixture configu
 | Hardware watchdog | Remove power if the test controller stops proving liveness |
 
 Exact values belong to the test contract and fixture configuration. The system must reject configurations where the total phase limits exceed the maximum episode duration.
+
+### 21.1 Recommended starting values
+
+**Recommended, to be replaced by measurements from the thin hardware slice (HLD 10, WP5).** Each value states its basis so it can be re-derived when parts change.
+
+| Timeout | Starting value | Basis |
+|---|---|---|
+| Lease heartbeat interval / expiry | 1 s / 5 s | Detects a lost Controller well inside one episode (HLD 05 §11) |
+| Host → MCU heartbeat / MCU host-loss shutdown | 250 ms / 1 s | HLD 05 §9.3 |
+| MCU hardware watchdog | 2 s (maximum available about 8.3 s on RP2040) | Backstop for firmware lockup only; the interlock remains independent (HLD 02 §19.1) |
+| Instrument or MCU command acknowledgement | 100 ms | USB round trip of a few ms plus margin |
+| DUT reset and boot to heartbeat | 2 s | ESP32-S3 reaches `app_main` in about 320 ms with default settings; margin for firmware start-up (HLD 02 §19.1) |
+| Rail settling | 200 ms, requiring 3 consecutive in-tolerance read-backs | Linear regulators and load switches settle in milliseconds; the read-back requirement guards against overshoot |
+| OLED ready after its rail is stable | 150 ms | SSD1306 panel on about 100 ms after VCC is stable (HLD 02 §19.1) |
+| DUT command acknowledgement | 250 ms | Firmware command loop plus UART latency |
+| Workload completion | From the event template; at most 5 s | Bounded by the contract's `maxEpisodeS` |
+| Observation window | 500 ms to 2 s, from the contract | Long enough for several OLED frames and heartbeats (heartbeat limit 500 ms) |
+| Normal shutdown | 500 ms | Escalate to emergency cutoff if outputs are not confirmed off |
+| Total episode | 10 s (PRD example `total_episode_s_max`) | Final software bound |
 
 ## 22. Console behavior
 

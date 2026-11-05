@@ -1,4 +1,9 @@
 > **Status:** Methodology and alternative implementation proposal. The ActiveQual HLD documents define current service ownership. For the implemented architecture, Decision proposes candidates; Backend and Controller own approval and execution. Values and hardware limits in this document are examples until reviewed for the selected fixture.
+>
+> **Superseded points (2026-11-05):**
+> - The weighted acquisition function in §8 is not used; planners are TPE (default) and others behind a common interface (HLD 06).
+> - Channel 1 "main power" is not varied in the first benchmark; the ESP32 supply is fixed (HLD 02 §6).
+> - The 30-test demo assumes a failure is found within 30 episodes; simulation shows that needs a wide seeded island or a 50-episode budget (HLD 06 §5).
 
 # ChipCheck — Complete Project Walkthrough
 

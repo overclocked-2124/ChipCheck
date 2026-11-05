@@ -1,5 +1,10 @@
 # ActiveQual HLD 04: Test Contract and Domain Model
 
+**Project:** ActiveQual: AI-Driven Adaptive Physical Testing for Embedded Systems  
+**Document type:** High-Level Design  
+**Status:** Initial draft for team review  
+**Depends on:** HLD 01, HLD 02, HLD 03
+
 ## 1. Purpose and Scope
 
 ### 1.1 Purpose
@@ -233,6 +238,8 @@ The oracle compares usable measurements with the public requirements. A measured
 
 Changing any field creates a new contract version and invalidates the arm state (HLD 03 §6.2). Results stay linked to the contract version that produced them.
 
+**Example limits:** the OLED rail range in the example may sit partly below the SSD1306's specified supply, and many breakout modules add a regulator that changes what the controller sees. Take limits from the selected parts (HLD 02 §19.1).
+
 **Implementation status:** The Decision Service reads `controls`, `activeWhen`, and `forbidden` from this schema. Backend validation, the Oracle, and the console do not yet consume it.
 
 ## 13. Robustness and Verdict
@@ -282,6 +289,13 @@ Every physical episode counts against its pool, including invalid and inconclusi
 
 - `forcedEveryN` applies equally to every adaptive planner and is fixed before comparison runs, or is removed.
 - Baselines (random, grid) run without the coverage phase; a separate "coverage then random" run isolates the effect of the coverage phase.
+
+**Evidence since ratification (HLD 06 §4 and §7), pending a team decision:**
+
+- Forced exploration never improved discovery in simulation and was significantly worse on one benchmark. Recommendation: remove `forcedEveryN`.
+- The pairwise coverage phase gave small, non-significant gains on two benchmarks and was significantly worse on one (25% vs 35% discovery within 30 episodes). Recommendation: make coverage an optional setting, off by default.
+- Minimizing toward nominal cannot show that a condition already at its nominal value is necessary (for example, green LED off). Recommendation: add one necessity probe per such discrete control, at a cost of about one episode each.
+- A 16-episode verification budget was enough for a narrow failure window but ran out for wider windows. Recommendation: 24 episodes.
 
 ## 15. Decisions and Open Questions
 
