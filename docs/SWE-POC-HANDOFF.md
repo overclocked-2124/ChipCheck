@@ -19,7 +19,7 @@ This guide predates the work below. Where it disagrees with the HLDs, the HLDs w
 | §3 Decision 5, campaign phases | Recorded in HLD 04 §14. Simulation showed the coverage phase and forced exploration do not help; see HLD 06. |
 | §4, three `decision.py` bugs | **Fixed** with regression tests. |
 | §5, planner plugins | Interface and registry built with `tpe`, `gp`, `random`, `grid`. Coverage and staged-hybrid planners not built. In simulation GP-BO beat TPE on two benchmarks and lost on one (HLD 06 §3). |
-| §6, BenchAdapter | Not started. |
+| §6, BenchAdapter | Not started. The `loop://` idea in §6.2 does not work (pyserial's `loop://` echoes the host's own writes); HLD 10 §5.3 replaces it with an in-process MCU emulator behind a byte-stream transport. |
 | §7, milestones | Milestone 1 partly done; Milestones 2 to 4 not started. HLD 10 holds the current plan. |
 
 Further defects found and fixed after this guide was written: GP proposal starvation, unbounded memory on huge numeric ranges, unvalidated numeric controls, and correlated random streams between campaigns with nearby seeds.

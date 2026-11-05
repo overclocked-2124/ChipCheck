@@ -227,6 +227,7 @@ activequal/
 │   └── service/           Local episode state machine, leases and safety coordination
 ├── adapter/
 │   └── service/           Instrument-neutral interfaces and device-specific drivers
+├── tools/                 Benchmark CLI and hardware test harness
 ├── console/
 │   └── ui/                Next.js, React, TypeScript, and the server routes that call the control plane
 └── firmware/

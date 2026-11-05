@@ -49,46 +49,63 @@ The control plane and the simulator need no hardware, so L0–L2 can run in clou
 | Test-controller firmware | HLD 05 §9 protocol; host-loss shutdown; watchdog; event templates within timing tolerance |
 | DUT firmware | HLD 02 §12 workloads; telemetry; seeded fault behind a build flag with ground truth on a separate link |
 
-## 5. Work packages and order
+## 5. Milestones and work packages
 
-```text
-              ┌─ WP1 Safety-rule library ─┐
-WP0 (done) ───┼─ WP2 Oracle ───────────────┼─ WP4 Backend ─┬─ WP6 Agent ── WP8 Simulated end-to-end (Gate A)
-              └─ WP3 Simulator adapter ────┘               └─ WP7 Console campaign flow
-WP5 Thin hardware slice (in parallel from week 1) ── WP9 Serial driver + firmware ── WP10 Dummy-load (Gate B)
-                                                                  └── WP11 DUT integration ── Gate C ── WP12 Research campaigns
-```
+**ActiveQual decision (2026-11-05):** the build runs in four milestones. Milestone 2 runs the whole software loop, Controller included, against the simulator before any serial or hardware work, so every milestone ends with something runnable.
 
-| WP | Content | Depends on |
+### 5.1 Package layout
+
+Follows HLD 01 §6.2: `model/` (contract v2 schema, predicates, canonical hash, safety-rule library), `storage/`, `service/` (Backend and Oracle), `agent/service/`, `decision/service/` (exists), `controller/service/`, `adapter/service/`, `tools/` (benchmark CLI, hardware test harness), `console/ui/`, `firmware/`. One Python project with two entry points: `control-plane` and `bench`. The contract parsing now in `decision/service/domain.py` moves to `model/` so Backend, Controller and Decision share it.
+
+### 5.2 Milestones
+
+| Milestone | Work packages | Ends with |
 |---|---|---|
-| WP0 | Decision Service, contract v2 domain (done) | — |
-| WP1 | Shared safety-rule library | HLD 04 |
-| WP2 | Oracle (Options A and B) | HLD 04 |
-| WP3 | Simulator adapter and benchmark CLI (move the evaluation harness into the repository); fixed/corner and coverage baseline planners required by HLD 01 §3.2 | HLD 06 |
-| WP4 | Backend: contracts, campaigns, candidates, episodes, leases, results, events; SQLite | WP1, WP2, HLD 05, HLD 08 |
-| WP5 | Thin hardware slice: one rail, DUT, real latency read-back; measure noise σ and settling | Parts for one rail |
-| WP6 | Agent loop and verification phase | WP4 |
-| WP7 | Console campaign pages | WP4, HLD 09 |
-| WP8 | Simulated end-to-end campaign through every service | WP3, WP6 |
-| WP9 | Serial driver, loopback tests, test-controller firmware | HLD 05 §9 |
-| WP10 | Dummy-load safety acceptance | WP9, safety hardware |
-| WP11 | DUT firmware, seeded benchmark on hardware | WP10 |
-| WP12 | Pre-registered research campaigns and report | Gate C |
+| M1 Planners and simulator | WP0 (done), WP3 | Benchmark CLI reproduces the HLD 06 tables |
+| M2 Software loop on the simulator | WP1, WP2, WP4, WP6, WP13, WP8 | **Gate A**, driven through the API |
+| M3 Serial driver and loopback | WP9 | Loopback adapter passes the Controller test suite; firmware test vectors published |
+| M4 Console | WP7 | HLD 09 pages; legacy setup path removed |
+
+| WP | Content | Depends on | Effort (person-weeks) |
+|---|---|---|---|
+| WP0 | Decision Service, contract v2 domain (done) | — | — |
+| WP1 | Shared safety-rule library in `model/`; RFC 8785 canonical JSON for the contract hash | HLD 04 | 1 |
+| WP2 | Oracle (Options A and B, classification order HLD 03 §15.1) | HLD 04 | 0.5 |
+| WP3 | `BenchAdapter` interface; in-memory simulator adapter with B1a, B1b, B1w, B2, B3 (no fault), B4 (instrument glitches); fixed/corner and coverage baseline planners (Halton sequence, no new dependency); benchmark CLI ported from the evaluation harness | HLD 06 | 1.5–2 |
+| WP4 | Backend: HLD 05 §5 and §7 endpoints, HLD 03 state machines, idempotency, events, SQLite (HLD 08), bench token and reviewer role (HLD 07) | WP1, WP2 | 2 |
+| WP5 | Thin hardware slice: one rail, DUT, real latency read-back; measure noise σ and settling | Parts for one rail | hardware track |
+| WP6 | Agent loop: discovery and verification pools, confirm, minimize, bracket, stop rules; phase-plan items as configuration flags | WP4 | 1 |
+| WP13 | Controller core: claim and lease, preflight, phase state machine, ordered shutdown, local spool, against any `BenchAdapter` | WP4 | 1–1.5 |
+| WP8 | Simulated end-to-end campaigns through every service; parity check that full-stack campaigns match the benchmark CLI (HLD 01 CTX-09) | WP3, WP6, WP13 | 0.5 |
+| WP9 | COBS + CRC framing library; byte-stream transport interface; in-process MCU emulator (the firmware's reference); loopback and physical serial adapters; dummy-load test harness | HLD 05 §9 | 2 |
+| WP7 | Console: contract editor, arm checklist, live campaign over server-sent events, failure region, verification, counterexample, report, comparison | WP4 API stable | 3 |
+| WP10 | Dummy-load safety acceptance | WP9, safety hardware | hardware track |
+| WP11 | DUT firmware, seeded benchmark on hardware | WP10 | hardware track |
+| WP12 | Pre-registered research campaigns and report | Gate C | research track |
+
+Software total: about 12 person-weeks, spread over the platform and algorithms roles (§9).
+
+### 5.3 Implementation constraints
+
+- **One control-plane process, one server worker.** SQLite has one writer and the Agent loop runs inside the process; several workers would mean several writers and duplicate Agent loops.
+- **No OS-specific test transport.** pyserial's `loop://` only echoes the host's own writes, and virtual pty pairs are POSIX-only. Adapters talk to a byte-stream transport; tests plug in the in-process MCU emulator, so they run on Linux, macOS and Windows alike.
+- **Planner exclusion is not a retry policy.** The Agent schedules retries of invalid points as new linked episodes (HLD 03 §17.2).
+- **The benchmark CLI is a fast path.** Research numbers on hardware go through the full stack; the WP8 parity check guards the difference.
 
 ## 6. Schedule (relative weeks)
 
 | Week | Software | Hardware |
 |---:|---|---|
-| 1 | WP1, WP2 | Inventory; order parts; WP5 begins |
-| 2 | WP1, WP2, WP3 | WP5: one rail on a dummy load |
-| 3 | WP4 | WP5: DUT on one rail, latency read-back, noise measured |
-| 4 | WP4, WP6 | Kill criterion K1 (§8) |
-| 5 | WP6, WP7 | WP9: framing and firmware |
-| 6 | WP8, **Gate A** | WP9, cutoff and E-stop |
-| 7 | WP7, hardening | WP10 dummy-load acceptance |
-| 8 | Bench integration | **Gate B**; kill criterion K2 |
-| 9 | Bench integration | WP11 DUT integration |
-| 10 | **Gate C**; pre-registration frozen | 100 nominal episodes |
+| 1 | Package layout; WP3 | Inventory; order parts; WP5 begins |
+| 2 | WP3 done (M1); WP1, WP2 | WP5: one rail on a dummy load |
+| 3 | WP4; WP9 framing and emulator begin | WP5: DUT on one rail, latency read-back, noise measured |
+| 4 | WP4; WP9 test vectors to firmware | Kill criterion K1 (§8) |
+| 5 | WP6, WP13 | Firmware against the test vectors |
+| 6 | WP8, **Gate A**; WP7 begins | Cutoff and E-stop |
+| 7 | WP9 adapters done (M3); WP7 | WP10 dummy-load acceptance |
+| 8 | WP7; bench integration | **Gate B**; kill criterion K2 |
+| 9 | WP7; bench integration | WP11 DUT integration |
+| 10 | WP7 done (M4); **Gate C**; pre-registration frozen | 100 nominal episodes |
 | 11 | WP12 research campaigns | Supervised campaign blocks |
 | 12 | Report, demo rehearsal, evidence freeze | Hardware freeze |
 
@@ -96,9 +113,9 @@ WP5 Thin hardware slice (in parallel from week 1) ── WP9 Serial driver + fir
 
 | Gate | Pass condition |
 |---|---|
-| A — simulated end to end | A campaign runs Console → Backend → Agent → Decision → simulator → Oracle → report with no hardware; L0–L2 green |
+| A — simulated end to end | A campaign runs through the API: Backend → Agent → Decision → Backend safety → Controller → simulator adapter → Oracle → report, with no hardware; the WP8 parity check passes; L0–L2 green |
 | B — dummy-load safety | Every HLD 02 §18 test passes on dummy loads; host loss and E-stop measured |
-| C — DUT ready | 100 nominal episodes with under 5% invalid; seeded benchmark detected on a fixed plan; calibration recorded |
+| C — DUT ready | 100 nominal episodes with under 5% invalid; seeded benchmark detected on a fixed plan; calibration recorded; Console shows every HLD 03 §22 item |
 
 ## 8. Kill and pivot criteria
 
@@ -117,9 +134,11 @@ Adapted from PRD §28 for five people:
 |---|---|
 | A — Research lead | HLD 06 pre-registration, analysis, report, demo |
 | B — Hardware and safety lead | WP5, WP10, HLD 02 decisions, safety approvals |
-| C — Embedded lead | WP9 firmware, WP11 DUT firmware, seeded benchmarks |
-| D — Algorithms and data lead | WP2, WP3, WP6 verification phase, statistics |
-| E — Platform lead | WP1, WP4, WP7, WP8, deployment |
+| C — Embedded lead | WP9 framing spec, MCU emulator and test vectors (weeks 3–4); test-controller firmware; WP11 DUT firmware and seeded benchmarks |
+| D — Algorithms and data lead | WP2, WP3, WP6 verification phase; WP9 host-side serial adapters and dummy-load harness (weeks 6–7); statistics |
+| E — Platform lead | WP1, WP4, WP13 Controller (week 5), WP8, WP7, deployment |
+
+Load check: no role carries more than one work package in the same week except week 6 (E closes WP8 and starts WP7). WP9 is split between C and D because firmware alone fills C's weeks 3–7.
 
 Two-person review for any safety-limit or fixture change (PRD §28.1).
 
@@ -136,3 +155,4 @@ Two-person review for any safety-limit or fixture change (PRD §28.1).
 | Date | Change |
 |---|---|
 | 2026-11-05 | Initial draft |
+| 2026-11-05 | Milestones locked after a two-pass review: Controller work package added, Gate A defined through the API, serial work moved earlier, layout aligned with HLD 01 §6.2, implementation constraints added |
