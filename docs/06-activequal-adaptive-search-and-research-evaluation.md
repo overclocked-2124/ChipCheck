@@ -40,20 +40,20 @@ Benchmarks (one OLED rail at 0.01 V steps, red and green LED, five workloads; 1,
 | B1w | Wider island | about 11 |
 | B2 | Cliff: reset with no precursor, at 3.15–3.18 V, red on, sensor read | 8 points |
 
-Discovery within 30 and 50 episodes (500 campaigns per cell for random and TPE; 120 for GP-BO (69 so far for B2) for GP-BO):
+Discovery within 30 and 50 episodes (500 campaigns per cell for random and TPE; 120 for GP-BO for GP-BO):
 
 | Benchmark | Random | TPE | GP-BO |
 |---|---|---|---|
 | B1a | 11% / 18% | 39% / 72% | **62% / 86%** |
 | B1b | 11% / 18% | 35% / 65% | 28% / 41% |
 | B1w | 25% / 39% | 83% / 99% | **91% / 98%** |
-| B2 | 17% / 29% | 14% / 20% | 16% / 26% (n = 69, run in progress) |
+| B2 | 17% / 29% | 14% / 20% | 15% / 22% |
 
 Findings:
 
 1. **TPE beats random by a wide margin when a measurable precursor exists** (all three B1 variants, log-rank p < 0.0001).
 2. **On the cliff fault, TPE is significantly worse than random** (log-rank p = 0.004). With no gradient, TPE concentrates on regions that look good and stops exploring. Adaptive search is not a general improvement; the research claim must be limited to failures with a measurable precursor.
-3. **GP-BO and TPE each win somewhere.** GP-BO was significantly better than TPE on B1a and B1w (log-rank p < 0.001), where a partial precursor gives the model a gradient across states. It was significantly worse on B1b (p = 0.0001), where the precursor appears only in the target state. On the cliff it was no different from TPE or random (partial data). GP-BO also costs a large optional dependency and 0.1 to a few seconds per proposal; TPE costs milliseconds.
+3. **GP-BO and TPE each win somewhere.** GP-BO was significantly better than TPE on B1a and B1w (log-rank p < 0.001), where a partial precursor gives the model a gradient across states. It was significantly worse on B1b (p = 0.0001), where the precursor appears only in the target state. On the cliff it was no different from TPE (p = 0.64) or random (p = 0.19). GP-BO also costs a large optional dependency and 0.1 to a few seconds per proposal; TPE costs milliseconds.
 4. Random's measured discovery matches the exact calculation for every benchmark (for example B2: 17% measured, 18.2% expected), which validates the simulator and the seed handling.
 
 ## 4. Campaign plan evidence
