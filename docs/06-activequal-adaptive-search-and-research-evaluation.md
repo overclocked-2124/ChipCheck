@@ -161,7 +161,7 @@ No planner tuning on held-out benchmarks after results are seen (PRD §21.7).
 - **The precursor assumption decides the result.** Adaptive search wins only when a measurable precursor exists; on hardware the real failure may be a cliff.
 - **The simulated B2** adds a red-LED condition that the handoff's B2 description does not include.
 - **The guard band in §5** was fixed at 5 ms while noise varied.
-- **GP-BO results were sensitive to the harness and to seed handling.** An earlier analysis concluded GP-BO never beat TPE; after the seed fix the result reversed on two benchmarks. Treat planner rankings as provisional until repeated on hardware.
+- **An earlier GP-BO estimate was unreliable.** An earlier analysis concluded GP-BO never beat TPE. Those campaigns used consecutive seeds whose random streams overlapped, so their effective sample was far smaller than their count. Changing the seed scheme does not itself change GP-BO's behavior (47% vs 50% discovery within 30 episodes on B1a, 60 campaigns each, identical 14% fallback rate). Two independent estimates on B1a, 62% (120 campaigns) and 50% (60 campaigns), both exceed TPE's 39% (500 campaigns). Planner rankings remain provisional until repeated on hardware.
 - **Earlier numbers are superseded:** results reported before 2026-11-05 used a harness that hid GP starvation, or campaigns whose random streams overlapped between nearby seeds. Only the numbers in this document should be used.
 
 ## 11. Open decisions
