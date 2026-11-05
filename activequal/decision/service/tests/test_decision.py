@@ -245,6 +245,26 @@ class HugeRangeTests(unittest.TestCase):
             propose({"contract": self.huge("integer"), "method": "grid"})
 
 
+class SeedIndependenceTests(unittest.TestCase):
+    """Campaigns with nearby seeds must not reuse each other's random stream."""
+
+    @staticmethod
+    def campaign_points(seed, method="random", steps=30):
+        history = []
+        for _ in range(steps):
+            c = propose({"contract": contract(), "method": method, "seed": seed, "count": 1,
+                         "warmupTrials": 10, "history": history})["tests"][0]["conditions"]
+            history.append({"conditions": c, "outcome": "PASS", "robustness": 0.5})
+        return [tuple(sorted(h["conditions"].items())) for h in history]
+
+    def test_adjacent_seeds_give_independent_campaigns(self):
+        a, b = self.campaign_points(300), self.campaign_points(301)
+        self.assertLess(len(set(a) & set(b)), 8)   # was 29 of 30 with seed + step
+
+    def test_each_call_stays_deterministic(self):
+        self.assertEqual(self.campaign_points(7, steps=12), self.campaign_points(7, steps=12))
+
+
 class FallbackTests(unittest.TestCase):
     """A model that only ever proposes an executed point must not starve the caller."""
 

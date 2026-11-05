@@ -7,6 +7,7 @@ this package and register it in ``planners/__init__.py``.
 
 from __future__ import annotations
 
+import hashlib
 import time
 from typing import Any, Protocol
 
@@ -23,6 +24,18 @@ class PlannerPlugin(Protocol):
 
     def propose(self, domain: SearchDomain, history: list[EpisodeRecord], count: int, seed: int,
                 config: dict[str, Any]) -> list[CandidateProposal]: ...
+
+
+def step_seed(seed: int, step: int, purpose: str = "planner") -> int:
+    """Seed for one stateless call, derived from the campaign seed and the history length.
+
+    Hashing (rather than ``seed + step``) keeps each call deterministic while making
+    campaigns with nearby seeds independent: with addition, campaign s at step k reused the
+    sampler seed of campaign s+1 at step k-1, so adjacent campaigns proposed almost the
+    same points.
+    """
+    digest = hashlib.sha256(f"{purpose}:{seed}:{step}".encode()).digest()
+    return int.from_bytes(digest[:4], "big")
 
 
 class OptunaPlanner:
@@ -47,9 +60,9 @@ class OptunaPlanner:
 
     def propose(self, domain: SearchDomain, history: list[EpisodeRecord], count: int, seed: int,
                 config: dict[str, Any]) -> list[CandidateProposal]:
-        # Advance the seed with the amount of history. A fixed seed would replay the
-        # same pseudo-random sequence from index 0 on every stateless call.
-        sampler = self.make_sampler(domain, seed + len(history), config)
+        # A fixed seed would replay the same pseudo-random sequence on every stateless call,
+        # so the seed is derived from the campaign seed and the amount of history.
+        sampler = self.make_sampler(domain, step_seed(seed, len(history)), config)
         study = optuna.create_study(direction="minimize", sampler=sampler)
         seen: set[tuple[Any, ...]] = set()
         trained = 0
@@ -83,12 +96,12 @@ class OptunaPlanner:
             seen.add(key)
             proposals.append(CandidateProposal(f"candidate-{len(proposals) + 1}", conditions, reason))
         if self.fallback_to_random and len(proposals) < count:
-            self._fill_random(domain, seen, proposals, count, seed + len(history))
+            self._fill_random(domain, seen, proposals, count, step_seed(seed, len(history), "fallback"))
         return proposals
 
     def _fill_random(self, domain: SearchDomain, seen: set[tuple[Any, ...]],
                      proposals: list[CandidateProposal], count: int, seed: int) -> None:
-        study = optuna.create_study(sampler=optuna.samplers.RandomSampler(seed=seed + 7919))
+        study = optuna.create_study(sampler=optuna.samplers.RandomSampler(seed=seed))
         attempts, limit = 0, len(seen) + max(50, count * 50)
         while len(proposals) < count and attempts < limit:
             attempts += 1
