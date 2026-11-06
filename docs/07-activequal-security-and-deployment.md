@@ -100,7 +100,12 @@ Rules from the PRD (§26) that remain in force:
 - Clearing a lockout requires confirming that the fixture was physically inspected; the confirmation and the reviewer are recorded.
 - Approving a contract requires a second person for any change to safety limits (PRD §28.1).
 
-**Open decision:** whether the lab requires named user accounts in the MVP or a shared operator account with a recorded name per action.
+**ActiveQual decision (2026-11-06):** a shared operator account with a recorded name per action; named accounts wait for remote deployment (§9).
+
+Loopback binding alone does not stop another local process from calling the control plane, so human actions carry two credentials as well:
+
+- The Console's server routes hold an **operator token** (a file with mode 0600, like the bench token, §8) and send it on every researcher request. The control plane rejects researcher endpoints without it. The browser never sees the token.
+- Reviewer actions (approving a contract or fixture tuple, clearing a lockout) also need a **reviewer passphrase**, typed in the Console for each action and checked against a hash in the workstation configuration. It guards against a researcher approving their own change by accident, which is the threat the MVP defends against (§2); it is not a defence against a determined local user.
 
 ## 8. Secrets and configuration
 
@@ -118,18 +123,23 @@ If the control plane later moves off the bench workstation:
 - add named accounts with project-scoped authorization;
 - keep arming and lockout clearing physically local.
 
-## 10. Open decisions
+## 10. Decisions
 
-| Decision | Recommended direction |
+**ActiveQual decision (2026-11-06):**
+
+| Decision | Outcome |
 |---|---|
-| User accounts in the MVP | Shared operator account with a recorded name per action |
+| User accounts in the MVP | Shared operator account with a recorded name per action; operator token and reviewer passphrase (§7) |
+| Bench authentication | Per-fixture bearer token as in §5; mutual TLS only if the bench moves to another machine |
 | Process supervisor | systemd user units on Linux; a Procfile runner on other platforms |
-| Token rotation | Rotate per evaluation block and on any suspected exposure |
+| Control-plane port | `127.0.0.1:8001` |
+| Token rotation | Bench and operator tokens rotated per evaluation block and on any suspected exposure |
 
 ## 11. Acceptance checklist
 
 - Control plane and Console listen only on loopback; the bench process opens no listening socket.
 - A bench token for fixture A cannot claim or submit for fixture B.
+- A researcher request without the operator token, and a reviewer action without the passphrase, are rejected and logged.
 - A replayed result with a changed manifest hash is rejected with `INTEGRITY_ERROR`.
 - Changing any item in §6 invalidates arming.
 - Killing each process during an episode leaves the bench in shutdown state.
@@ -139,3 +149,4 @@ If the control plane later moves off the bench workstation:
 | Date | Change |
 |---|---|
 | 2026-11-05 | Initial draft |
+| 2026-11-06 | §10 decisions recorded; operator token and reviewer passphrase added, since loopback binding alone does not authenticate human actions |

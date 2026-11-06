@@ -597,6 +597,68 @@ Sources:
 [S13] [TI SLVA861](https://edgeworker.ti.com/lit/pdf/slva861) ·
 [S14] [Analog Devices: dynamically adjust output voltage](https://www.analog.com/en/resources/technical-articles/dynamically-adjust-the-right-output-voltage.html)
 
+## 19.2 Planning estimates (2026-11-06)
+
+**ActiveQual decision:** software, simulator profiles, firmware test vectors and the initial contract use the values below until WP5 (HLD 10) measures the real ones. **They are planning estimates derived from datasheets and published measurements, not reviewed safety limits.** No physical campaign may use them without the hardware owner's review (HLD 04 §15), and every value replaced by a measurement is recorded with the fixture version that produced it.
+
+### Latency measurement noise and guard band
+
+The OLED latency observation (limit 120 ms, HLD 06 §6) has three main sources of timing jitter:
+
+| Source | Estimate | Basis |
+|---|---|---|
+| Panel scan phase | Frame period about 9.3 ms (about 107 Hz from Fosc / (D × K × MUX) = 370 kHz / (1 × 54 × 64)); a write waits uniformly for the scan, σ ≈ 9.3 / √12 ≈ 2.7 ms | SSD1306 typical oscillator and default settings [S15] |
+| Firmware tick | ESP-IDF's default `CONFIG_FREERTOS_HZ` is 100 (10 ms ticks, σ ≈ 2.9 ms); at 1000 Hz, σ ≈ 0.3 ms | ESP-IDF FreeRTOS Kconfig [S16] |
+| Optical detection | Photodiode or phototransistor into a comparator, timed by test-controller timer capture: microseconds, negligible | — |
+
+A full 128×64 frame over I²C at 400 kHz takes about 1,024 bytes × 9 clocks / 400 kHz ≈ 23 ms. That is a fixed offset in the latency, not noise.
+
+- **Decision:** DUT firmware sets `CONFIG_FREERTOS_HZ=1000`, removing the tick term.
+- **Planning σ = 3 ms, guard band U = 2σ = 6 ms.** The inconclusive band is 114–126 ms against the 120 ms limit. With the default 100 Hz tick, σ would be about 4 ms (5 ms with margin, U = 10 ms).
+- Kill criterion K4 (HLD 10 §8) is far away: it needs σ near 10 ms, which these sources do not produce. A measured σ well above 3 ms points to an unmodelled source (I²C clock stretching, Wi-Fi task preemption) to be found in WP5 before campaigns.
+- The HLD 06 simulator profiles at σ = 2.5 ms remain the closest match. The σ = 10 ms rows are a stress case.
+
+### Rail accuracy and settling
+
+| Quantity | Planning value | Basis |
+|---|---|---|
+| Rail read-back error (INA226 bus voltage) | ±5 mV at 3.6 V: 0.1% maximum gain error (3.6 mV) plus one 1.25 mV LSB | INA226 datasheet [S17] |
+| Settled tolerance | ±10 mV, one search step, so read-back error uses at most half of it | — |
+| Search step | 10 mV, as in the HLD 06 benchmarks | HLD 06 §3 |
+| Settle check | Three consecutive in-tolerance readings at 1.1 ms conversion with 16-sample averaging (about 18 ms each for bus voltage alone, 35 ms with shunt and bus both converted); timeout 500 ms gives `INVALID_EXPERIMENT` | INA226 conversion times [S10] |
+| OLED ready after rail settles | 150 ms: about 100 ms panel-on time [S5] plus margin | [S5] |
+| DUT boot timeout | 1 s: about 320 ms to `app_main` [S8] | [S8] |
+
+### Current and temperature limits
+
+| Rail or quantity | Expected | Planning trip | Basis |
+|---|---|---|---|
+| OLED rail (0.96" SSD1306 module) | About 20 mA typical, 25 mA measured peak with all pixels lit | 40 mA (1.6× peak); warning at 30 mA | Vendor specification and a published bench measurement [S18][S19] |
+| ESP32-S3 fixed 3.3 V rail | Wi-Fi transmit peaks about 285–355 mA, depending on mode and module | Supply rated at least 500 mA [S7]; trip at 600 mA | Third-party reproductions of the Espressif current tables [S20]; confirm in the current module datasheet |
+| Sensor rail (BME280) | Sub-milliampere | 10 mA, to cover pull-ups and the isolation buffer | Not yet sourced: confirm from the BME280 datasheet [S6] |
+| Fixture temperature | Room temperature | 45 °C | Policy choice, well inside the parts' rated ranges: a heating fixture stops the campaign before it can bias measurements. Confirm against each part's datasheet |
+
+### Episode duration
+
+Boot (up to 1 s) + rail settle and OLED ready (about 0.2 s) + workload and observation (2–5 s) + ordered shutdown and discharge (about 0.5 s) gives **about 4–7 s, planned as 8 s**. This sits inside the 6–10 s HLD 06 §8 uses for bench-time estimates, so its estimate of about 3–5 hours per two-planner comparison stands.
+
+### Part defaults
+
+| Choice | Planning default | Reason |
+|---|---|---|
+| OLED module (§20 Q8, Q9) | A 0.96" SSD1306 module without an onboard regulator, or with it bypassed; autonomous range 3.00–3.60 V | With the regulator in dropout the controller does not see the commanded voltage [S3][S4]; some module datasheets allow VBAT down to 3.0 V [S2]. The seeded window 3.20–3.30 V stays inside the range |
+| Test-controller MCU | RP2040 (Raspberry Pi Pico) | HLD 01 lists RP2040 or STM32; the RP2040 has a hardware watchdog [S12] and timer capture, and it is cheap and easy to get |
+| OLED oracle (§20 Q7) | Light sensor over a flashing region, as in §11 | Enough for the MVP; checking displayed content is a stretch goal |
+| Monitoring and isolation (§20 Q10) | INA226 on the OLED and sensor rails; supply read-back or INA219 on the fixed ESP32 rail; TCA9517 on each I²C branch | §19.1 |
+
+Sources:
+[S15] [SSD1306 frame-rate relation and typical Fosc, as quoted from the datasheet](https://hackaday.com/2018/05/08/push-it-to-the-limit-ssd1306-at-150-fps) and the [SSD1306 datasheet](https://academy.cba.mit.edu/classes/output_devices/OLED/SSD1306.pdf) ·
+[S16] [ESP-IDF FreeRTOS Kconfig (mirror), `FREERTOS_HZ` default 100](https://git.eaw.app/eaw/esp-idf/raw/branch/master/components/freertos/Kconfig) and the [CircuitPython discussion of the 100 Hz default](https://github.com/adafruit/circuitpython/issues/9133) ·
+[S17] [TI INA226 datasheet](https://www.ti.com/document-viewer/INA226/datasheet/GUID-XXXXXXXX-SF0T-XXXX-XXXX-000000348723) ·
+[S18] [Soldered 0.96" SSD1306 module](https://docs.soldered.com/ssd1306/overview/) ·
+[S19] [SSD1306 128×64 current measurement](https://preamp.org/static/ssd1306-oled-current-consumption/index.html) ·
+[S20] [ESP32-S3 power consumption table (Deneyap Kart)](https://deneyapkart.org/en/docs/guc-tuketimi-esp32-s3)
+
 ## 20. Decisions required next
 
 The team must next determine:
@@ -612,4 +674,4 @@ The team must next determine:
 9. Is the seeded fault window inside that range, or must it move?
 10. Which rails get INA226-class monitoring, and which isolation part is used per peripheral branch?
 
-Until these are answered, this HLD fixes responsibilities and interfaces but deliberately leaves component-specific electrical limits open.
+Questions 7–10 have planning defaults in §19.2, and question 6 has planning values there that still need approval. Questions 1–5 depend on the laboratory inventory and are answered in week 1 (HLD 10 §6). Until the hardware owner reviews them, this HLD fixes responsibilities and interfaces, and the component-specific electrical limits remain planning values only.

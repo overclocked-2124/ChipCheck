@@ -177,7 +177,7 @@ From HLD 03 §16, mapped to this API:
 
 ## 10. DUT protocol
 
-- **Open decision:** whether workload commands reach the ESP32 through the test-controller MCU (deterministic timing, HLD 02 §8) or directly from the host over UART (simpler, as in `SIMPLIFIED-PLAN.md`). **Recommended:** route timing-critical commands (workload start, LED states inside an event template) through the MCU; DUT telemetry may stream to the host over UART for the MVP.
+- **ActiveQual decision (2026-11-06, §13):** workload commands could reach the ESP32 through the test-controller MCU (deterministic timing, HLD 02 §8) or directly from the host over UART (simpler, as in `SIMPLIFIED-PLAN.md`). Route timing-critical commands (workload start, LED states inside an event template) through the MCU; DUT telemetry may stream to the host over UART for the MVP.
 - Message set from HLD 02 §12: `SET_RED_LED`, `SET_GREEN_LED`, `OLED_REFRESH`, `SENSOR_READ`, `AUXILIARY_OPERATION`, `GET_HEARTBEAT`, `GET_RESET_REASON`, `RESET_TO_KNOWN_STATE`. Every reply carries episode tag, sequence number, status, timestamps, and error code.
 - **Recommended:** use the same COBS + CRC framing as §9 so both links share one parser and one test suite.
 - The DUT never emits a seeded-fault marker on the evaluation link; ground-truth markers go to a separate, physically disconnected log during evaluation campaigns.
@@ -207,13 +207,15 @@ Bench   -> Backend       POST /bench/episodes/e42/results   key=e42+1+manifestHa
 Backend -> Oracle        classify(evidence, contract)       -> DUT_FAILURE, margins, reason
 ```
 
-## 13. Open decisions
+## 13. Decisions
 
-| Decision | Recommended direction |
+**ActiveQual decision (2026-11-06):**
+
+| Decision | Outcome |
 |---|---|
-| DUT command path (§10) | Timing-critical commands through the MCU |
-| Trace format | Parquet for sampled series, raw binary plus JSON sidecar for scope captures (HLD 08) |
-| Schema publication | JSON Schema generated from the typed models, checked in and versioned |
+| DUT command path (§10) | Timing-critical commands go through the MCU, so their timestamps share the MCU clock with the event markers and the optical capture |
+| Trace format | Owned by HLD 08 §10; this document only carries trace references and checksums |
+| Schema publication | JSON Schema generated from the typed models, checked in and versioned; CI fails if the checked-in schema differs from the generated one |
 
 ## 14. Acceptance checklist
 
@@ -227,3 +229,4 @@ Backend -> Oracle        classify(evidence, contract)       -> DUT_FAILURE, marg
 | Date | Change |
 |---|---|
 | 2026-11-05 | Initial draft |
+| 2026-11-06 | §13 decisions recorded; trace format deferred to HLD 08 |

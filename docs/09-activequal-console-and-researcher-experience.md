@@ -74,13 +74,16 @@ Adapted from PRD §18.1, using the evidence from HLD 06:
 
 The demo shows the real seed and run log; a recorded run is a labelled fallback only.
 
-## 9. Open decisions
+## 9. Decisions
 
-| Decision | Recommended direction |
+**ActiveQual decision (2026-11-06):**
+
+| Decision | Outcome |
 |---|---|
 | Contract editing | Form for common fields plus a validated JSON editor; approval always on the canonical JSON |
 | Charting | Server-computed series rendered client-side; no client-side statistics |
 | Access from other machines | Not in the MVP (HLD 07) |
+| Page priority | If HLD 10 §5.2.2 descoping applies, the failure-region and comparison pages go first; the arm checklist, live campaign and stop-reason views are never descoped |
 
 ## 10. Acceptance checklist
 
@@ -94,3 +97,4 @@ The demo shows the real seed and run log; a recorded run is a labelled fallback 
 | Date | Change |
 |---|---|
 | 2026-11-05 | Initial draft |
+| 2026-11-06 | §9 decisions recorded; page priority for descoping added |

@@ -167,20 +167,25 @@ No planner tuning on held-out benchmarks after results are seen (PRD §21.7).
 - **An earlier GP-BO estimate was unreliable.** An earlier analysis concluded GP-BO never beat TPE. Those campaigns used consecutive seeds whose random streams overlapped, so their effective sample was far smaller than their count. Changing the seed scheme does not itself change GP-BO's behavior (47% vs 50% discovery within 30 episodes on B1a, 60 campaigns each, identical 14% fallback rate). Two independent estimates on B1a, 62% (120 campaigns) and 50% (60 campaigns), both exceed TPE's 39% (500 campaigns). Planner rankings remain provisional until repeated on hardware.
 - **Earlier numbers are superseded:** results reported before 2026-11-05 used a harness that hid GP starvation, or campaigns whose random streams overlapped between nearby seeds. Only the numbers in this document should be used.
 
-## 11. Open decisions
+## 11. Decisions
 
-| Decision | Recommended direction |
+**ActiveQual decision (2026-11-06):** the recommendations of this document are adopted as follows. Each can be reopened only by new evidence recorded here, not by results on the pre-registered benchmarks (§9).
+
+| Decision | Outcome |
 |---|---|
-| Default adaptive method for the demo and for hardware campaigns | Run both TPE and GP-BO in comparisons; neither dominates (§3). Pick the demo planner after the thin hardware slice shows which failure shape is realistic |
-| Coverage phase and forced exploration | Coverage optional and off by default; remove forced exploration (§4) |
-| Primary metric | Log-rank on episodes to first confirmed failure (§8) |
-| Demo benchmark | Wide disclosed island at a 50-episode budget (§5) |
-| Verification budget and necessity probes | 24 episodes with probes (§7) |
-| Benchmark harness | Move the evaluation harness into the repository as the simulator adapter and benchmark CLI (HLD 10, WP3) |
-| MVP baselines (fixed/corner, space-filling, pairwise) | Build fixed/corner and coverage planners (HLD 10, WP3), or amend HLD 01 §3.2 and the PRD exit criteria |
+| Default adaptive method for the demo | **TPE.** On the demo benchmark (wide island, 50 episodes) TPE and GP-BO are equivalent (99% vs 98%, §3); TPE costs milliseconds per proposal and needs no torch dependency. GP-BO is better on narrow islands with a partial precursor (B1a) but worse when the precursor appears only in the target state (B1b), so neither is a safe general default on accuracy alone. Revisit only if WP5 shows a failure shape where GP-BO wins clearly (partial precursor across states, B1a-like) |
+| Planners in hardware comparisons | **Primary, pre-registered: TPE vs random**, 20 campaigns per planner per benchmark at budget 50 (§8). **Secondary: GP-BO**, run only if bench time remains after the primary comparison; its comparison with TPE is reported as exploratory because it needs more campaigns than are planned (§8) |
+| Coverage phase and forced exploration | Coverage optional and off by default; forced exploration removed (HLD 04 §14) |
+| Primary metric | Log-rank on episodes to first confirmed failure, censored at the discovery budget; discovery rate at 30 and 50 episodes secondary (§8) |
+| Demo benchmark | Wide disclosed island (about 11–15 failing voltages) at a 50-episode budget (§5) |
+| Verification budget and necessity probes | 24 episodes with probes (§7, HLD 04 §14) |
+| Guard band | U = 2σ from the fixture calibration (§6); planning value in HLD 02 §19.2 |
+| Benchmark harness | Moved into the repository as the simulator adapter and benchmark CLI (HLD 10, WP3) |
+| MVP baselines | Build the fixed/corner planner and the coverage planner (pairwise array plus a Halton sequence), both through the common interface (HLD 10, WP3). Pairwise and space-filling are covered by the coverage planner, so HLD 01 §3.2 and the PRD exit criteria stand unchanged |
 
 ## 12. Change log
 
 | Date | Change |
 |---|---|
 | 2026-11-05 | Initial draft with simulation evidence |
+| 2026-11-06 | §11 open decisions resolved: TPE demo default, TPE vs random as the primary hardware comparison, baselines confirmed |

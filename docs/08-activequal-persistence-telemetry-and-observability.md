@@ -120,12 +120,14 @@ Errors must reach the Console, not only the logs (HLD 03 §22).
 - Requested versus measured deviation per rail.
 - Counterexample reproduction rates with confidence intervals.
 
-## 10. Open decisions
+## 10. Decisions
 
-| Decision | Recommended direction |
+**ActiveQual decision (2026-11-06):**
+
+| Decision | Outcome |
 |---|---|
-| Database | SQLite (WAL) for the MVP behind a repository interface |
-| Trace format | Parquet for sampled series; raw capture plus JSON sidecar for scope data |
+| Database | SQLite (WAL) for the MVP behind a repository interface; one writer, matching the single control-plane process (HLD 10 §5.3) |
+| Trace format | Parquet for sampled series; raw capture plus JSON sidecar for scope data. This document owns the trace format; HLD 05 refers here |
 | Metrics backend | Prometheus text endpoint, read by the Console; no external monitoring stack |
 
 ## 11. Acceptance checklist
@@ -140,3 +142,4 @@ Errors must reach the Console, not only the logs (HLD 03 §22).
 | Date | Change |
 |---|---|
 | 2026-11-05 | Initial draft |
+| 2026-11-06 | §10 decisions recorded; trace format owned here |
