@@ -564,6 +564,39 @@ These tests demonstrate the behavior observed during acceptance. They do not pro
 | 11 | Rehearse repeated campaigns and repair invalid-experiment causes |
 | 12 | Freeze hardware, calibration, wiring, and final evidence |
 
+## 19.1 Part research findings (2026-11-05)
+
+These findings narrow the open choices below. They are **Recommended, pending the laboratory inventory and the hardware/safety owner's review**; none is a final selection.
+
+| Item | Finding | Implication |
+|---|---|---|
+| SSD1306 OLED controller | Solomon Systech lists the charge-pump supply VBAT at 3.3–4.2 V and logic VDD at 1.65–3.3 V; that page is marked preliminary. Some module datasheets give VBAT down to 3.0 V. [S1][S2] | The example OLED rail range of 3.00–3.60 V (PRD §9.2, HLD 04 §12) may sit partly below the controller's specified supply, and so may the seeded fault window around 3.20–3.30 V. The contract's autonomous range must come from the exact module's datasheet. |
+| SSD1306 breakout modules | Many 0.96" modules carry an onboard 3.3 V regulator ("662K") and accept 3.3–5 V on VCC; not all do. [S3][S4] | On such a module, varying VCC between 3.0 and 3.6 V mostly operates the regulator in dropout, so the controller does not see the commanded voltage. Either use a module without the regulator, bypass it, or measure the rail on the controller side. |
+| SSD1306 power-up | Reset pulse of at least 3 µs; panel on about 100 ms after VCC is stable. [S5] | Sets the minimum settle time before an OLED workload (HLD 03 §21.1). |
+| BME280 sensor | VDD 1.71–3.6 V, VDDIO 1.2–3.6 V; absolute maximum 4.25 V. [S6] | A sensor rail of 3.0–3.6 V is inside the recommended range. Interface pins must stay within VDDIO + 0.3 V, which matters when the sensor rail is lowered (§7). |
+| ESP32-S3 | Recommended supply 3.0–3.6 V, 3.3 V typical, at least 500 mA; power-on to `app_main` about 320 ms with default settings. [S7][S8] | Keeps the fixed DUT supply at 3.3 V (§6). DUT reset and boot timeout should allow at least 1 s. |
+| I²C isolation | TI TCA9517/TCA9517A: high-impedance I²C pins when powered off, 5.5 V tolerant, independent supply rails in any order. [S9] | A candidate for the per-peripheral isolation required in §7. Confirm leakage and the powered-off current limits in the datasheet before selection. |
+| Rail current and voltage monitoring | INA226: 16-bit, 2.5 µV shunt LSB, 10 µV max offset, 0.1% max gain error, selectable conversion time 140 µs–8.2 ms. INA219: 12-bit, lower cost. [S10] | INA226 preferred for read-back accuracy (NFR-05). Choose the shunt so the maximum current gives close to 81.92 mV. |
+| Rail switching | TI TPS22918: 1–5.5 V, 2 A, configurable rise time, quick output discharge. [S11] | A candidate per-rail load switch: controlled slew limits inrush, and quick discharge helps confirm the shutdown state (§13.2). |
+| Test-controller watchdog | RP2040 hardware watchdog maximum about 8.3 s. [S12] | Suitable as a backstop; the faster host-loss shutdown (1 s, HLD 05 §9.3) must be implemented in firmware, and the independent interlock remains required. |
+| Custom programmable rails (Path B) | A DAC can trim an adjustable regulator by injecting current into its feedback node; current DACs such as LM10011 and LTC7106 exist for this. [S13][S14] | Supports the low-cost rail path in §17.2 and `SIMPLIFIED-PLAN.md`, but the start-up state, accuracy, and stability must be verified on a dummy load before any DUT use. |
+
+Sources:
+[S1] [Solomon Systech SSD1306](https://www.solomon-systech.com/?p=5534) ·
+[S2] [DEP 096016B-W module datasheet](https://cdn.soselectronic.com/productdata/e3/cc/8632cd9a/dep-096016b-w.pdf) ·
+[S3] [DM-OLED069-642 datasheet](https://cdn.shopify.com/s/files/1/0264/7629/files/DM-OLED069-642.pdf) ·
+[S4] [0.96" SSD1306 OLED notes](https://docs.circuit.rocks/displays/oled-ssd1306/) ·
+[S5] [Digilent PmodOLED reference](https://www.electrokit.com/upload/product/41010/41010136/PmodOLED_rm.pdf) ·
+[S6] [Bosch BME280 datasheet](https://cdn.sparkfun.com/assets/5/3/0/f/7/BME280_Datasheet.pdf) ·
+[S7] [ESP32-S3 hardware design guidelines](https://documentation.espressif.com/esp-hardware-design-guidelines/en/latest/esp32s3/index.html) ·
+[S8] [ESP startup time optimization](https://docs.espressif.com/projects/esp-techpedia/en/latest/esp-friends/advanced-development/performance/reduce-boot-time.html) ·
+[S9] [TI TCA9517](https://www.ti.com/product/TCA9517) ·
+[S10] [INA219 vs INA226 comparison](https://esp32.co.uk/ina219-vs-ina226-vs-ina260-best-current-sensor-esp32/) ·
+[S11] [TI TPS22918 datasheet](https://www.ti.com/lit/pdf/SLVSD76) ·
+[S12] [Pico SDK hardware_watchdog](https://picodocs.pinout.xyz/group__hardware__watchdog.html) ·
+[S13] [TI SLVA861](https://edgeworker.ti.com/lit/pdf/slva861) ·
+[S14] [Analog Devices: dynamically adjust output voltage](https://www.analog.com/en/resources/technical-articles/dynamically-adjust-the-right-output-voltage.html)
+
 ## 20. Decisions required next
 
 The team must next determine:
@@ -575,5 +608,8 @@ The team must next determine:
 5. Can three independent programmable channels be borrowed, or must rail modules be built?
 6. What current and temperature limits will the hardware owner and faculty guide approve?
 7. Is a light-sensor OLED oracle sufficient, or must the benchmark detect incorrect displayed content?
+8. Which OLED module (with or without an onboard regulator), and what autonomous OLED rail range its datasheet supports (§19.1)?
+9. Is the seeded fault window inside that range, or must it move?
+10. Which rails get INA226-class monitoring, and which isolation part is used per peripheral branch?
 
 Until these are answered, this HLD fixes responsibilities and interfaces but deliberately leaves component-specific electrical limits open.

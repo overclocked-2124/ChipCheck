@@ -16,6 +16,18 @@
 
 ---
 
+## Reader notes (2026-11-05)
+
+This PRD remains the research vision. The HLDs (`docs/00`–`docs/10`) define the current design, and where they differ, the HLDs win. Notable differences:
+
+- **Scope and schedule:** the HLDs plan a 12-week MVP with one DUT; this PRD's 24-week plan, second DUT, and natural-fault scenario are stretch goals (HLD 10 §10).
+- **Demo validity gate (§17.6):** in simulation, TPE found a narrow seeded island (about 5 failing voltages) within 30 episodes in only about 40% of campaigns. Reaching about 95% needed roughly 15 failing voltages at 30 episodes, or about 9 at 50 episodes (HLD 06 §5).
+- **Adaptive method (§13, §31):** TPE and GP-BO are both kept. In simulation neither dominated: GP-BO was better on two benchmarks and worse on one, and adaptive search did not beat random on a fault with no measurable precursor (HLD 06 §3).
+- **Robustness (§13.3):** see HLD 04 §13 for the normalized planner signal and the guard-banded verdict.
+- **Example limits (§9.2):** the OLED rail range of 3.00–3.60 V may sit partly below the SSD1306's specified supply; limits come from the exact parts (HLD 02 §19.1).
+
+---
+
 ## 1. Executive summary
 
 Embedded products often pass nominal bench tests but fail under rare combinations of otherwise legal conditions: low input voltage, a radio-current burst, a flash write, a peripheral wake-up, temperature, timing, or a substituted power component. These failures are difficult to reproduce because the state space grows multiplicatively and because each physical experiment costs time, instrument access, and device wear.

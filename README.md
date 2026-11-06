@@ -22,6 +22,13 @@ ChipCheck is a hardware-in-the-loop (HIL) test station that:
 - [HLD 01: System Context and Platform Boundaries](./docs/01-activequal-system-context-and-platform-boundaries.md)
 - [HLD 02: Hardware Architecture](./docs/02-activequal-hardware-architecture.md)
 - [HLD 03: Episode Execution and Safety State Machine](./docs/03-activequal-episode-execution-and-safety-state-machine.md)
+- [HLD 04: Test Contract and Domain Model](./docs/04-activequal-test-contract-and-domain-model.md)
+- [HLD 05: APIs and Instrumentation Protocols](./docs/05-activequal-apis-and-instrumentation-protocols.md)
+- [HLD 06: Adaptive Search and Research Evaluation](./docs/06-activequal-adaptive-search-and-research-evaluation.md)
+- [HLD 07: Security and Deployment](./docs/07-activequal-security-and-deployment.md)
+- [HLD 08: Persistence, Telemetry, and Observability](./docs/08-activequal-persistence-telemetry-and-observability.md)
+- [HLD 09: Console and Researcher Experience](./docs/09-activequal-console-and-researcher-experience.md)
+- [HLD 10: Verification and Implementation Plan](./docs/10-activequal-verification-and-implementation-plan.md)
 
 - [Algorithm and ML Methodology](./Documnentation%20on%20Algorithm/ChipCheck_Algorithm_and_ML_Methodology.docx)
 - [Simplified implementation proposal](./docs/SIMPLIFIED-PLAN.md)
@@ -29,4 +36,4 @@ ChipCheck is a hardware-in-the-loop (HIL) test station that:
 - [Project walkthrough](./docs/WALKTHROUGH.md)
 - [SWE Handoff: Software-First POC, Plug-and-Play Planners & Hardware Integration](./docs/SWE-POC-HANDOFF.md)
 
-The HLD documents define the current service boundaries. The methodology documents provide planner and research guidance; their combined Python stack is an alternative proposal.
+The HLD documents define the current design and service boundaries. The methodology and proposal documents provide background; where they differ from the HLDs, the HLDs win.

@@ -9,9 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@grpc/grpc-js": "^1.13.0",
-    "@grpc/proto-loader": "^0.8.0",
-    "next": "15.5.12",
+    "next": "15.5.29",
     "react": "19.1.1",
     "react-dom": "19.1.1"
   },

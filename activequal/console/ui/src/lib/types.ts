@@ -25,7 +25,7 @@ export type SetupDraft = {
   maxTemperature: string;
   safeState: string;
   experimentBudget: string;
-  plannerMethod: "tpe" | "random" | "grid";
+  plannerMethod: "tpe" | "gp" | "random" | "grid";
   plannerSeed: string;
 };
 

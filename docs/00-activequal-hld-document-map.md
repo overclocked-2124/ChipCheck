@@ -48,16 +48,16 @@ Moving a file into the main Documents folder means it is accepted as the current
 | No. | Document | Main question answered | Status |
 |---:|---|---|---|
 | 00 | HLD Document Map | Which document owns each design topic, and in what order should the documents be read? | Approved |
-| 01 | System Context and Platform Boundaries | What is ActiveQual, who uses it, which services exist, and where are the application, bench, and hardware boundaries? | Approved |
-| 02 | Hardware Architecture | How are the DUT, power rails, test controller, measurements, signal protection, and physical safety mechanisms connected? | Approved |
+| 01 | System Context and Platform Boundaries | What is ActiveQual, who uses it, which services exist, and where are the application, bench, and hardware boundaries? | Approved; 2026-11-05 stack amendment in review |
+| 02 | Hardware Architecture | How are the DUT, power rails, test controller, measurements, signal protection, and physical safety mechanisms connected? | Approved; 2026-11-05 part research in review |
 | 03 | Episode Execution and Safety State Machine | How does a campaign and one physical experiment move from proposal through safety validation, execution, shutdown, classification, and recovery? | Initial draft |
-| 04 | Test Contract and Domain Model | How does a DUT declare variables, legal ranges, constraints, workloads, observations, failure rules, budgets, and compatible fixtures? | Planned |
-| 05 | APIs and Instrumentation Protocols | What RPCs and device messages connect the Console, BFF, Backend, Agent, Controller, Adapter, test controller, and DUT? | Planned |
-| 06 | Adaptive Search and Research Evaluation | How are experiments selected, how do baselines and adaptive methods share one interface, and how will performance be compared fairly? | Planned |
-| 07 | Security and Deployment | How are users and machine processes authenticated, how are services deployed, and how are credentials and network boundaries protected? | Planned |
-| 08 | Persistence, Telemetry, and Observability | Which database entities, events, measurements, traces, logs, and metrics are stored, and how are they queried and retained? | Planned |
-| 09 | Console and Researcher Experience | What screens and user flows support contract review, arming, live execution, failures, minimization, comparison, and reporting? | Planned |
-| 10 | Verification and Implementation Plan | How will software, simulator, dummy-load, hardware, safety, and research acceptance be tested and delivered within 12 weeks? | Planned |
+| 04 | Test Contract and Domain Model | How does a DUT declare variables, legal ranges, constraints, workloads, observations, failure rules, budgets, and compatible fixtures? | Initial draft |
+| 05 | APIs and Instrumentation Protocols | What RPCs and device messages connect the Console, BFF, Backend, Agent, Controller, Adapter, test controller, and DUT? | Initial draft |
+| 06 | Adaptive Search and Research Evaluation | How are experiments selected, how do baselines and adaptive methods share one interface, and how will performance be compared fairly? | Initial draft |
+| 07 | Security and Deployment | How are users and machine processes authenticated, how are services deployed, and how are credentials and network boundaries protected? | Initial draft |
+| 08 | Persistence, Telemetry, and Observability | Which database entities, events, measurements, traces, logs, and metrics are stored, and how are they queried and retained? | Initial draft |
+| 09 | Console and Researcher Experience | What screens and user flows support contract review, arming, live execution, failures, minimization, comparison, and reporting? | Initial draft |
+| 10 | Verification and Implementation Plan | How will software, simulator, dummy-load, hardware, safety, and research acceptance be tested and delivered within 12 weeks? | Initial draft |
 
 ## 4. Document responsibilities
 
@@ -328,9 +328,17 @@ Use these terms consistently:
 | `01-activequal-system-context-and-platform-boundaries.md` | Main Documents folder |
 | `02-activequal-hardware-architecture.md` | Main Documents folder |
 | `03-activequal-episode-execution-and-safety-state-machine.md` | Draft working folder; move to Documents after review |
+| `04-activequal-test-contract-and-domain-model.md` | Initial draft |
+| `05-activequal-apis-and-instrumentation-protocols.md` | Initial draft |
+| `06-activequal-adaptive-search-and-research-evaluation.md` | Initial draft |
+| `07-activequal-security-and-deployment.md` | Initial draft |
+| `08-activequal-persistence-telemetry-and-observability.md` | Initial draft |
+| `09-activequal-console-and-researcher-experience.md` | Initial draft |
+| `10-activequal-verification-and-implementation-plan.md` | Initial draft |
 
 ## 10. Change log
 
 | Date | Change |
 |---|---|
 | 2026-09-10 | Created the document map, numbering convention, topic ownership, standard HLD structure, and initial status table |
+| 2026-11-05 | Added initial drafts of HLDs 05–10; recorded HLD 01 and 02 additions as in review |

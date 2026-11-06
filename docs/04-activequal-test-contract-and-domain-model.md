@@ -1,5 +1,10 @@
 # ActiveQual HLD 04: Test Contract and Domain Model
 
+**Project:** ActiveQual: AI-Driven Adaptive Physical Testing for Embedded Systems  
+**Document type:** High-Level Design  
+**Status:** Initial draft for team review  
+**Depends on:** HLD 01, HLD 02, HLD 03
+
 ## 1. Purpose and Scope
 
 ### 1.1 Purpose
@@ -35,7 +40,7 @@ This model provides the foundation for **Doc 05’s APIs and protocols** and **D
 
 ## 2. Core Experiment and Ownership
 
-For the initial demonstration, one campaign runs up to 30 experiments on the ESP32-S3 display-sensor setup. Each experiment applies a chosen combination of OLED voltage, LED states, and workload, then records the measurements and result.
+For the initial demonstration, one campaign runs up to 30 discovery experiments on the ESP32-S3 display-sensor setup, plus a separate verification pool for confirming and minimizing a failure (§14). Each experiment applies a chosen combination of OLED voltage, LED states, and workload, then records the measurements and result.
 
 - **Decision** chooses the next combination using previous results.
 - **Agent** manages the run and its experiment budget.
@@ -178,16 +183,136 @@ For one experiment, Decision selects an allowed OLED voltage, an allowed LED con
 
 The oracle compares usable measurements with the public requirements. A measured latency over the requirement can show a DUT failure; a missing measurement or a rail that did not reach the requested condition may make the experiment invalid. The hidden seeded trigger is not given to Decision or used by the oracle. The result depends on the observed behavior in the actual run.
 
-## 12. Decisions and Open Questions
+## 12. Ratified Contract Schema (v2)
 
-This draft establishes the initial OLED demonstration as the working example, with small setup changes allowed. A campaign records the conditions it tested, separates requested inputs from measured values, and judges observable behavior against public requirements. Decision proposes conditions; Backend checks them against limits; Controller executes and measures them; the oracle classifies the evidence.
+**ActiveQual decision:** Test contracts use the structured v2 schema below. Free-text requirements, observations, and forbidden combinations are not accepted. The contract is stored as canonical JSON, and its hash is computed over that canonical form. Values shown are the OLED example, not approved limits.
+
+```json
+{
+  "contractVersion": 2,
+  "setup": {"dut": "esp32s3-oled-demo", "firmwareSha256": "…", "fixture": "bench-A", "fixtureRev": "A"},
+  "controls": {
+    "oledRailV": {"type": "continuous", "unit": "V", "min": 3.00, "max": 3.60, "step": 0.01, "nominal": 3.30,
+                  "shutdown": 0.0, "slewPerSMax": 0.5, "bind": {"target": "supply.ch2", "action": "setVoltage"}},
+    "sensorRailV": {"type": "continuous", "unit": "V", "min": 3.00, "max": 3.60, "step": 0.01, "nominal": 3.30,
+                  "shutdown": 0.0, "slewPerSMax": 0.5, "bind": {"target": "supply.ch3", "action": "setVoltage"}},
+    "redLed":    {"type": "boolean", "nominal": false, "bind": {"target": "dut", "action": "LED RED"}},
+    "greenLed":  {"type": "boolean", "nominal": false, "bind": {"target": "dut", "action": "LED GREEN"}},
+    "workload":  {"type": "categorical", "values": ["idle", "oled_refresh", "sensor_read", "flash_write"],
+                  "nominal": "idle", "bind": {"target": "dut", "action": "WORKLOAD"}},
+    "flashOffsetMs": {"type": "integer", "unit": "ms", "min": 0, "max": 20, "step": 1, "nominal": 0,
+                      "activeWhen": {"control": "workload", "eq": "flash_write"}, "bind": {"target": "mcu", "action": "flashOffset"}},
+    "dwellMs":   {"type": "duration", "unit": "ms", "min": 200, "max": 2000, "step": 100, "nominal": 500}
+  },
+  "forbidden": [{"all": [{"control": "workload", "eq": "flash_write"}, {"control": "sensorRailV", "gte": 3.55}]}],
+  "observations": {
+    "oledLatencyMs":     {"unit": "ms", "source": "firmware", "reduction": "max",
+                          "requiredWhen": {"control": "workload", "eq": "oled_refresh"}, "uncertainty": 5},
+    "maxHeartbeatGapMs": {"unit": "ms", "source": "firmware", "reduction": "max_gap", "required": true, "uncertainty": 10},
+    "resetCount":        {"unit": "count", "source": "mcu", "reduction": "count", "required": true},
+    "measuredOledRailV": {"unit": "V", "source": "instrument", "reduction": "mean", "required": true, "uncertainty": 0.01},
+    "measuredDut3v3MinV": {"unit": "V", "source": "instrument", "reduction": "min", "required": true, "uncertainty": 0.01}
+  },
+  "requirements": [
+    {"id": "latency",   "metric": "oledLatencyMs",     "op": "<=",    "limit": 120, "nominal": 31},
+    {"id": "heartbeat", "metric": "maxHeartbeatGapMs", "op": "<=",    "limit": 500, "nominal": 200},
+    {"id": "reset",     "metric": "resetCount",        "op": "exact", "limit": 0},
+    {"id": "dut_3v3_band", "metric": "measuredDut3v3MinV", "op": "band",  "lo": 3.135, "hi": 3.465, "nominal": 3.30}
+  ],
+  "validity": [{"metric": "measuredOledRailV", "tracks": "oledRailV", "tolerance": 0.03}],
+  "scoring": {"planner": "normalized_min", "verdict": "guard_banded"},
+  "safety": {"channels": {"supply.ch2": {"maxA": 0.2, "maxV": 3.6}, "supply.ch3": {"maxA": 0.2, "maxV": 3.6}},
+             "maxTempC": 60, "maxEpisodeS": 10},
+  "templates": [],
+  "campaign": {"budget": 30, "seed": 42, "plan": "default_v1"}
+}
+```
+
+### 12.1 Field rules
+
+| Field | Rule |
+|---|---|
+| Control `type` | `continuous`, `integer`, `duration`, `boolean`, or `categorical`. Numeric controls declare `min`, `max`, `step`, and a `nominal` inside the range and on the step grid. |
+| `activeWhen` | A control applies only while its predicate holds. While inactive it is held at `nominal`. Dependencies must not form a cycle. |
+| `bind` | Maps a control to an adapter target and action. This is the fixture-specific part; every target must exist on the registered fixture. |
+| Predicates | `forbidden`, `activeWhen`, and `requiredWhen` share one form: `{"control", <op>}` with `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, or `in`. A `forbidden` rule is `{"all": [...]}`; any matching rule rejects the candidate. |
+| `observations` | Each declares its `unit`, `source` (`firmware`, `mcu`, `instrument`, `optical`), `reduction`, whether it is required, and its `uncertainty`: the **expanded** measurement uncertainty U (coverage factor k = 2, about 2σ) from calibration. It is the guard band in §13. |
+| `requirements` | `op` is `<=`, `>=`, `exact`, or `band`. `nominal` sets the scale for the planner margin (§13). A requirement must never be placed on a control the planner varies: a band on the swept OLED rail would turn every legal command outside the band into a DUT failure. The example's band applies to the DUT's own regulated 3.3 V rail, which the DUT, not the bench, keeps in tolerance. |
+| `validity` | Conditions for a trustworthy experiment. A failed validity rule gives `INVALID_EXPERIMENT`, never `DUT_FAILURE`. Rail tracking is a validity rule, not a requirement. |
+| `templates` | Reserved for ordered event sequences in a later version. |
+
+Changing any field creates a new contract version and invalidates the arm state (HLD 03 §6.2). Results stay linked to the contract version that produced them.
+
+**Example limits:** the OLED rail range in the example may sit partly below the SSD1306's specified supply, and many breakout modules add a regulator that changes what the controller sees. Take limits from the selected parts (HLD 02 §19.1).
+
+**Implementation status:** The Decision Service reads `controls`, `activeWhen`, and `forbidden` from this schema. Backend validation, the Oracle, and the console do not yet consume it.
+
+## 13. Robustness and Verdict
+
+**ActiveQual decision:** The Oracle runs in the Backend Service (HLD 01) and uses two separate calculations. Option A gives the planner a continuous signal. Option B decides the outcome.
+
+**Option A — normalized headroom (planner signal).** Each applicable requirement gives a margin clipped to [−1, +1]:
+
+| `op` | Margin |
+|---|---|
+| `<=` | `(limit − x) / (limit − nominal)` |
+| `>=` | `(x − limit) / (nominal − limit)` |
+| `band` | `min(x − lo, hi − x) / min(nominal − lo, hi − nominal)` |
+| `exact` | `+1` if equal, otherwise `−1` |
+
+Robustness is the minimum margin across applicable requirements, following signal temporal logic conjunction. A requirement that was not exercised, such as display latency during `idle`, is left out of the minimum. Per-requirement margins are stored with the episode so planners can model each one.
+
+**Option B — guard-banded verdict (outcome).** With `U` the observation's declared expanded uncertainty (§12.1; about 2σ), a `<=` requirement passes when `x ≤ limit − U`, fails when `x > limit + U`, and is inconclusive in between; other operators apply the same rule to each bound. This follows the guard-banding decision rules used by calibration and test laboratories (ILAC-G8 / ISO/IEC 17025). An inconclusive episode may be replayed under the campaign plan; if it remains inconclusive it is recorded as `INVALID_EXPERIMENT` with an inconclusive reason.
+
+A missing required observation always produces `INVALID_EXPERIMENT`, never a margin. Classification follows the order in HLD 03 §15.1.
+
+**Open decision:** Who sets each requirement's `nominal` and each observation's `uncertainty`. `U` must come from calibration of the selected bench, not from this example.
+
+## 14. Campaign Phase Plan
+
+**ActiveQual decision:** The campaign plan is part of the contract (`campaign.plan`) so it is reviewed and versioned with the limits.
+
+```json
+"plan": {
+  "discoveryBudget": 30, "verificationBudget": 16,
+  "init": {"minFraction": 0.2, "maxFraction": 0.35, "design": "pairwise+sobol", "include": ["nominal", "corners"]},
+  "explore": {"forcedEveryN": 5},
+  "confirm": {"maxReplays": 3, "confirmIfFails": 2},
+  "minimize": {"order": "discrete_then_continuous", "bracket": "expand_then_bisect"},
+  "onConfirmed": "stop",
+  "stop": {"consecutiveInvalid": 3, "noFeasibleCandidate": true}
+}
+```
+
+1. **Coverage.** A pairwise covering array over the categorical and Boolean controls, with nominal and corner values folded into its rows and Sobol points for continuous values. Size is the larger of the array and 20% of the discovery budget, capped at 35%.
+2. **Adaptive hunting.** The selected planner proposes the remaining discovery episodes. Repeated rejection of its candidates stops the campaign with a visible planner-failure reason.
+3. **Verification**, started only by a guard-banded failure. Replay up to three times: two failures confirm, two initial passes mark the failure transient, a split result is decided by the third replay. Then return each non-nominal control to `nominal` one at a time, keeping changes that preserve the failure, and bracket each remaining continuous control by expanding outward until a pass and then bisecting. When the verification budget runs out, the interval is reported at its achieved resolution.
+
+The campaign's declared budget (§9) is the sum of the two pools, so verification always fits inside it. Every physical episode counts against its pool, including invalid and inconclusive ones; rejected candidates do not. Tests-to-first-failure is measured on the discovery pool only, so every planner receives the same verification treatment. Reports state the total episodes used, not only the discovery budget. With `onConfirmed: "continue"`, the confirmed region is excluded from later proposals by Decision so the planner looks for a distinct failure.
+
+**Recommended, pending review:**
+
+- `forcedEveryN` applies equally to every adaptive planner and is fixed before comparison runs, or is removed.
+- Baselines (random, grid) run without the coverage phase; a separate "coverage then random" run isolates the effect of the coverage phase.
+
+**Evidence since ratification (HLD 06 §4 and §7), pending a team decision:**
+
+- Forced exploration never improved discovery in simulation and was significantly worse on one benchmark. Recommendation: remove `forcedEveryN`.
+- The pairwise coverage phase gave small, non-significant gains on two benchmarks and was significantly worse on one (25% vs 35% discovery within 30 episodes). Recommendation: make coverage an optional setting, off by default.
+- Minimizing toward nominal cannot show that a condition already at its nominal value is necessary (for example, green LED off). Recommendation: add one necessity probe per such discrete control, at a cost of about one episode each.
+- A 16-episode verification budget was enough for a narrow failure window but ran out for wider windows. Recommendation: 24 episodes.
+
+## 15. Decisions and Open Questions
+
+This draft establishes the initial OLED demonstration as the working example, with small setup changes allowed. A campaign records the conditions it tested, separates requested inputs from measured values, and judges observable behavior against public requirements. Decision proposes conditions; Backend checks them against limits; Controller executes and measures them; the Oracle in Backend classifies the evidence.
 
 The following details remain open until the exact bench setup is confirmed:
 
 - Which supply channels, measurement instruments, and peripherals will be used.
 - The reviewed voltage, current, temperature, timing, and shutdown limits for those parts.
 - Which signals the fixture can measure reliably and how their calibration is recorded.
-- How much of the declared budget to reserve for discovery, confirmation, and minimization.
+- The exact discovery and verification budgets for each campaign; §14 fixes the structure and defaults, not the bench-specific values.
+- Each requirement's `nominal` and each observation's measurement `uncertainty` (§13).
 - Which additional small setup changes should be compared with the OLED example.
 
 These values should be filled from the selected hardware and bench review, not guessed from the example. Keep earlier results tied to the setup that produced them.
