@@ -9,4 +9,4 @@ npm ci
 npm run dev
 ```
 
-Start the Decision Service from `../../decision/service`, then open http://localhost:3000. Set `CHIPCHECK_DECISION_URL` if the Decision Service is not at `http://127.0.0.1:8001/v1/proposals`. Use `npm run build` to verify a production build. Without measured history, TPE produces startup proposals. Adaptive selection begins only after the caller supplies measured outcomes and robustness values.
+Start the Decision Service from the repository root with `python -m activequal.decision.service.decision`, then open http://localhost:3000. Set `CHIPCHECK_DECISION_URL` if the Decision Service is not at `http://127.0.0.1:8001/v1/proposals`. Use `npm run build` to verify a production build. Without measured history, TPE produces startup proposals. Adaptive selection begins only after the caller supplies measured outcomes and robustness values.

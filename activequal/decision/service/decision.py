@@ -13,8 +13,8 @@ from typing import Any
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from domain import InvalidRequest, domain_from_contract, domain_from_setup, parse_history
-from planners import PLANNER_REGISTRY
+from activequal.decision.service.domain import InvalidRequest, domain_from_contract, domain_from_setup, parse_history
+from activequal.decision.service.planners import PLANNER_REGISTRY
 
 __all__ = ["InvalidRequest", "propose"]
 

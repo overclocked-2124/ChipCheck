@@ -7,7 +7,7 @@ from typing import Any
 
 import optuna
 
-from domain import (CandidateProposal, Control, EpisodeRecord, SearchDomain, canonical, condition_key,
+from activequal.decision.service.domain import (CandidateProposal, Control, EpisodeRecord, SearchDomain, canonical, condition_key,
                     is_forbidden)
 
 

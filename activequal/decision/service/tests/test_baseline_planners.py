@@ -2,10 +2,10 @@ import itertools
 import unittest
 from decimal import Decimal
 
-from decision import InvalidRequest, propose
-from domain import canonical, condition_key, domain_from_contract, is_forbidden, parse_history
-from planners import PLANNER_REGISTRY
-from planners.coverage_planner import halton, pairwise_array
+from activequal.decision.service.decision import InvalidRequest, propose
+from activequal.decision.service.domain import canonical, condition_key, domain_from_contract, is_forbidden, parse_history
+from activequal.decision.service.planners import PLANNER_REGISTRY
+from activequal.decision.service.planners.coverage_planner import halton, pairwise_array
 
 CODES = {"STARTUP", "MODEL", "FALLBACK", "BASELINE", "MANUAL"}
 
@@ -101,7 +101,7 @@ class CommonBehaviour(unittest.TestCase):
         self.assertIn("reason", result["tests"][0])
 
     def test_fallback_code(self):
-        from planners.base import OptunaPlanner
+        from activequal.decision.service.planners.base import OptunaPlanner
         import optuna
 
         class Stuck(optuna.samplers.BaseSampler):
@@ -146,7 +146,7 @@ class FixedCornerTests(unittest.TestCase):
 
     def test_exhaustion_returns_fewer_and_says_so(self):
         c = contract(controls={"v": {"type": "continuous", "min": 1.0, "max": 2.0, "step": 0.5, "nominal": 1.5},
-                               "led": {"type": "boolean"}})
+                               "led": {"type": "boolean"}}, forbidden=[])
         everything = []
         history = []
         while True:

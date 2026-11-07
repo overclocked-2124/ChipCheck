@@ -5,7 +5,8 @@ from typing import Any
 
 import optuna
 
-from domain import Control, InvalidRequest, SearchDomain, canonical, is_forbidden, number
+from activequal.decision.service.domain import Control, InvalidRequest, SearchDomain, canonical, is_forbidden
+from activequal.model.values import number
 
 from .plan_support import PlanCollector, grid_value, step_count
 

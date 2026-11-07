@@ -4,7 +4,7 @@ import warnings
 
 import optuna
 
-from domain import InvalidRequest
+from activequal.decision.service.domain import InvalidRequest
 
 from .base import OptunaPlanner
 

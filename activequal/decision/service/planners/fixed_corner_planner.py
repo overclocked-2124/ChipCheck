@@ -3,7 +3,7 @@ from __future__ import annotations
 import itertools
 from typing import Any
 
-from domain import SearchDomain
+from activequal.decision.service.domain import SearchDomain
 
 from .plan_support import PlanCollector, discrete_values, grid_value, is_numeric, step_count
 
