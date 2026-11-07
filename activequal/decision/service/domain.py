@@ -18,6 +18,7 @@ INTEGER_TYPES = {"integer", "duration"}
 MAX_CONTROLS = 12
 MAX_MAGNITUDE = 1e15   # numeric control bounds beyond this are not physical quantities
 MAX_STEPS = 1e12       # keeps Optuna's decimal arithmetic and the grid logic well inside their limits
+REASON_CODES = ("STARTUP", "MODEL", "FALLBACK", "BASELINE", "MANUAL")  # machine-readable (NFR-08)
 OUTCOMES = {"PASS", "DUT_FAILURE", "INVALID_EXPERIMENT", "SAFETY_ABORT"}
 
 
@@ -83,7 +84,8 @@ class EpisodeRecord:
 class CandidateProposal:
     id: str
     conditions: dict[str, Any]
-    reason: str
+    reason: str          # human text
+    code: str            # one of REASON_CODES
 
 
 # ---------------------------------------------------------------- predicates
