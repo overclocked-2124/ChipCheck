@@ -9,7 +9,7 @@ Oracle); Decision only needs the controls and parses leniently.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from activequal.model.errors import InvalidRequest
@@ -61,6 +61,7 @@ class ContractModel:
     validity: list[ValiditySpec] | None = None
     safety: SafetySpec | None = None
     plan: Any = None                         # campaign.plan: a name or the phase-plan object (HLD 04 §14)
+    setup: dict[str, Any] = field(default_factory=dict)   # dut, firmwareSha256, fixture, fixtureRev
 
 
 def _parse_control(name: str, spec: Any) -> ControlSpec:
@@ -178,7 +179,7 @@ def parse_contract(contract: Any, require_oracle: bool = False) -> ContractModel
     plan = campaign.get("plan")
     if plan is not None and not isinstance(plan, (str, dict)):
         raise InvalidRequest("contract.campaign.plan must be a name or an object")
-    model = ContractModel(name, controls, forbidden, budget, plan=plan)
+    model = ContractModel(name, controls, forbidden, budget, plan=plan, setup=dict(setup))
     oracle_sections = ("observations", "requirements", "safety")
     if not require_oracle and not any(key in contract for key in oracle_sections + ("validity",)):
         return model
@@ -195,4 +196,4 @@ def parse_contract(contract: Any, require_oracle: bool = False) -> ContractModel
             raise InvalidRequest(f"requirement {requirement.id!r} is on {requirement.metric!r}, which tracks a "
                                  "control; use a validity rule instead")
     return ContractModel(name, controls, forbidden, budget, observations, requirements, validity,
-                         parse_safety(contract["safety"]), plan)
+                         parse_safety(contract["safety"]), plan, dict(setup))
