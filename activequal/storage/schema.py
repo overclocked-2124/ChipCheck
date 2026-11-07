@@ -41,7 +41,10 @@ MIGRATIONS: list[str] = [
         revision TEXT NOT NULL,
         capabilities_json TEXT NOT NULL,
         current_calibration_id TEXT,
-        token_sha256 TEXT NOT NULL,
+        token_sha256 TEXT NOT NULL UNIQUE,
+        approved_mcu_firmware_sha256 TEXT,       -- the test-controller firmware the reviewer approved
+        health_json TEXT,                        -- latest bench-reported health (HLD 05 §7)
+        health_at TEXT,
         created_at TEXT NOT NULL
     );
 

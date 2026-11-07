@@ -67,7 +67,8 @@ class DatabaseTests(unittest.TestCase):
         db = Database()
         with self.assertRaises(sqlite3.IntegrityError):
             with db.transaction() as c:
-                c.execute("INSERT INTO fixtures VALUES ('f', 'missing', 'A', '[]', NULL, 'h', 't')")
+                c.execute("INSERT INTO fixtures (id, project_id, revision, capabilities_json, token_sha256, created_at)"
+                          " VALUES ('f', 'missing', 'A', '[]', 'h', 't')")
 
 
 if __name__ == "__main__":

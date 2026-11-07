@@ -8,6 +8,8 @@ Two additions go beyond the HLD 03 diagrams; both follow from "every safety trip
 cutoff and lockout" (HLD 03 §13, §26) and from the simulator test "E-stop during each
 physical phase" (§23.2):
 
+* a researcher can abort a campaign that is PAUSING or PAUSED (HLD 03 §14 allows abort at any
+  safe boundary, and a paused campaign would otherwise have no way to end);
 * a campaign that is PAUSING or ABORTING still has an episode running, so a safety trip there
   also reaches LOCKED_OUT;
 * an episode can reach EMERGENCY_CUTOFF from PREFLIGHT, CONFIGURING and SETTLING, because
@@ -72,8 +74,8 @@ CAMPAIGN_TRANSITIONS: Mapping[CampaignState, frozenset[CampaignState]] = {
     C.READY: frozenset({C.ARMED, C.DRAFT}),
     C.ARMED: frozenset({C.RUNNING, C.ABORTING, C.LOCKED_OUT}),
     C.RUNNING: frozenset({C.PAUSING, C.COMPLETED, C.ABORTING, C.LOCKED_OUT}),
-    C.PAUSING: frozenset({C.PAUSED, C.LOCKED_OUT}),
-    C.PAUSED: frozenset({C.RUNNING}),
+    C.PAUSING: frozenset({C.PAUSED, C.ABORTING, C.LOCKED_OUT}),
+    C.PAUSED: frozenset({C.RUNNING, C.ABORTING}),
     C.ABORTING: frozenset({C.ABORTED, C.LOCKED_OUT}),
     C.LOCKED_OUT: frozenset({C.DRAFT}),
     C.COMPLETED: frozenset(),

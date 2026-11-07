@@ -51,7 +51,7 @@ _OLED_EXAMPLE: dict[str, Any] = {
     "safety": {"channels": {"supply.ch2": {"maxA": 0.2, "maxV": 3.6}, "supply.ch3": {"maxA": 0.2, "maxV": 3.6}},
                "maxTempC": 60, "maxEpisodeS": 10},
     "templates": [],
-    "campaign": {"budget": 30, "seed": 42, "plan": "default_v1"},
+    "campaign": {"budget": 74, "seed": 42, "plan": "default_v1"},
 }
 
 
