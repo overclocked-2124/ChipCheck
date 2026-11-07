@@ -33,11 +33,17 @@ def read_token(path: Path) -> str:
     return token
 
 
-def build_adapter(mode: str, profile: str, noise_seed: int):
+def build_adapter(mode: str, profile: str, noise_seed: int, port: str | None = None, baud: int = 115200):
     if mode == "sim":
         from activequal.adapter.service.simulator import SimulatedBenchAdapter
         return SimulatedBenchAdapter(profile, noise_seed=noise_seed)
-    raise SystemExit(f"bench mode {mode!r} is not available yet; use --mode sim")
+    if mode == "serial":
+        if not port:
+            raise SystemExit("--mode serial needs --port (for example /dev/ttyACM0)")
+        from activequal.adapter.service.serial.host import HostConfig, SerialBenchAdapter
+        from activequal.adapter.service.serial.stream import PySerialStream
+        return SerialBenchAdapter(PySerialStream(port, baud), HostConfig())
+    raise SystemExit(f"unknown bench mode {mode!r}")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -48,6 +54,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--spool-dir", type=Path, default=Path.home() / ".local" / "share" / "activequal" / "spool")
     parser.add_argument("--mode", choices=["sim", "serial"], default="sim")
     parser.add_argument("--profile", default="B3", help="simulator benchmark profile (sim mode)")
+    parser.add_argument("--port", help="serial port of the test controller (serial mode)")
+    parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--noise-seed", type=int, default=0)
     parser.add_argument("--poll-interval", type=float, default=1.0)
     parser.add_argument("--instance-id", default=f"controller-{os.getpid()}")
@@ -55,7 +63,7 @@ def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
     client = HttpBackendClient(args.control_plane, read_token(args.token_file))
-    controller = Controller(client, build_adapter(args.mode, args.profile, args.noise_seed), Spool(args.spool_dir),
+    controller = Controller(client, build_adapter(args.mode, args.profile, args.noise_seed, args.port, args.baud), Spool(args.spool_dir),
                             args.fixture_id, instance_id=args.instance_id)
     stop = threading.Event()
     for sig in (signal.SIGINT, signal.SIGTERM):

@@ -16,6 +16,7 @@ dependencies = [
 #   pip install --extra-index-url https://download.pytorch.org/whl/cpu -e ".[gp]"
 gp = ["torch>=2.2", "scipy>=1.11"]
 dev = ["hypothesis>=6"]
+serial = ["pyserial>=3.5"]
 
 [project.scripts]
 control-plane = "activequal.service.app:main"
