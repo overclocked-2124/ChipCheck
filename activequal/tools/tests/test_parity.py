@@ -10,7 +10,8 @@ class ParityTests(unittest.TestCase):
         # pooled p = 50/80 = 0.625; spread = sqrt(0.625 * 0.375 * (1/40 + 1/40)) = sqrt(0.01171875) = 0.108253; z = 0.25 / 0.108253
         self.assertAlmostEqual(two_proportion_z(30, 40, 20, 40), 2.30940, places=4)
         self.assertEqual(two_proportion_z(0, 20, 0, 20), 0.0)
-        self.assertEqual(two_proportion_z(20, 20, 0, 20), float("inf"))
+        # pooled p = 0.5; spread = sqrt(0.25 * 0.1) = 0.158114; z = 1 / 0.158114
+        self.assertAlmostEqual(two_proportion_z(20, 20, 0, 20), 6.32456, places=4)
 
     def test_full_stack_matches_the_benchmark_cli_for_tpe_on_the_wide_island(self):
         result = check("B1w", "tpe", 30, 24, base_seed=11)
