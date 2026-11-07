@@ -2,13 +2,13 @@
 
 The Decision Service proposes test conditions using Optuna TPE or GP-BO. Random and Grid are baseline methods. It receives an approved domain and prior measured outcomes from its caller. Only `PASS` and `DUT_FAILURE` results with robustness values train the sampler; invalid experiments and safety aborts are excluded. Proposals are **not approved episodes** and cannot operate hardware.
 
-Run with Python 3.12 or newer:
+Run with Python 3.12 or newer, from the repository root:
 
 ```bash
 python -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python -m unittest discover -s tests -v
-.venv/bin/python decision.py
+.venv/bin/pip install -e ".[dev]"          # add ".[gp]" and --extra-index-url https://download.pytorch.org/whl/cpu for the gp planner
+.venv/bin/python -m unittest discover -t . -s activequal -v
+.venv/bin/python -m activequal.decision.service.decision
 ```
 
 ## Request shapes and planners

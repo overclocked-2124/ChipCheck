@@ -13,8 +13,8 @@ except ImportError:  # optional test dependency
 
 import optuna
 
-from decision import InvalidRequest, propose
-from domain import condition_key, domain_from_contract, is_forbidden
+from activequal.decision.service.decision import InvalidRequest, propose
+from activequal.decision.service.domain import condition_key, domain_from_contract, is_forbidden
 
 SETTINGS = settings(max_examples=int(os.environ.get("PROP_EXAMPLES", "60")), deadline=None, suppress_health_check=list(HealthCheck))
 

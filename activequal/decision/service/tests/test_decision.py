@@ -1,6 +1,6 @@
 import unittest
 
-from decision import InvalidRequest, propose
+from activequal.decision.service.decision import InvalidRequest, propose
 
 
 def setup():
@@ -83,7 +83,7 @@ class RegressionTests(unittest.TestCase):
         # A stateless sampler seeded identically replays the same stream; with 50+
         # prior points that used to leave zero candidates.
         import optuna
-        from domain import domain_from_setup
+        from activequal.decision.service.domain import domain_from_setup
         config = setup()
         config["rail"]["stepVolts"] = 0.01
         domain = domain_from_setup(config)
@@ -271,7 +271,7 @@ class FallbackTests(unittest.TestCase):
     @staticmethod
     def stuck_planner(fallback):
         import optuna
-        from planners.base import OptunaPlanner
+        from activequal.decision.service.planners.base import OptunaPlanner
 
         class Stuck(optuna.samplers.BaseSampler):
             def infer_relative_search_space(self, study, trial):
@@ -298,7 +298,7 @@ class FallbackTests(unittest.TestCase):
         return StuckPlanner()
 
     def run(self, fallback):
-        from domain import domain_from_contract, parse_history
+        from activequal.decision.service.domain import domain_from_contract, parse_history
         domain = domain_from_contract(contract())
         first = self.stuck_planner(False).propose(domain, [], 1, 0, {})
         history = parse_history(domain, [{"conditions": first[0].conditions, "outcome": "PASS", "robustness": 0.5}])

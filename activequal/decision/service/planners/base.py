@@ -13,7 +13,7 @@ from typing import Any, Protocol
 
 import optuna
 
-from domain import (CandidateProposal, EpisodeRecord, SearchDomain, canonical, condition_key,
+from activequal.decision.service.domain import (CandidateProposal, EpisodeRecord, SearchDomain, canonical, condition_key,
                     is_forbidden)
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
