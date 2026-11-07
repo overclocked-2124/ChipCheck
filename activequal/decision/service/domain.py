@@ -18,6 +18,7 @@ from activequal.model.values import number, options
 from activequal.model.errors import InvalidRequest
 from activequal.model.predicates import atom_matches, rule_matches
 
+REASON_CODES = ("STARTUP", "MODEL", "FALLBACK", "BASELINE", "MANUAL")  # machine-readable (NFR-08)
 OUTCOMES = {"PASS", "DUT_FAILURE", "INVALID_EXPERIMENT", "SAFETY_ABORT"}
 
 
@@ -56,7 +57,8 @@ class EpisodeRecord:
 class CandidateProposal:
     id: str
     conditions: dict[str, Any]
-    reason: str
+    reason: str          # human text
+    code: str            # one of REASON_CODES
 
 
 # ------------------------------------------------------------------ contract

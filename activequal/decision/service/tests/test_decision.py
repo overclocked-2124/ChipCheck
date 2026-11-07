@@ -189,7 +189,7 @@ class ContractTests(unittest.TestCase):
             propose({"contract": contract(), "setup": setup()})
 
     def test_unknown_method_lists_registered_planners(self):
-        with self.assertRaisesRegex(InvalidRequest, "grid, random, tpe"):
+        with self.assertRaisesRegex(InvalidRequest, "grid, manual, random, tpe"):
             propose({"setup": setup(), "method": "annealing"})
 
 

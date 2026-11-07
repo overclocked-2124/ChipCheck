@@ -22,3 +22,6 @@ class TPEPlanner(OptunaPlanner):
         if trained >= config["warmupTrials"]:
             return "TPE selected this from prior measured robustness"
         return "Startup coverage before adaptive feedback"
+
+    def code(self, trained, config):
+        return "MODEL" if trained >= config["warmupTrials"] else "STARTUP"

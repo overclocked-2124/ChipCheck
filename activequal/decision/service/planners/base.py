@@ -58,6 +58,10 @@ class OptunaPlanner:
     def reason(self, trained: int, config: dict[str, Any]) -> str:
         raise NotImplementedError
 
+    def code(self, trained: int, config: dict[str, Any]) -> str:
+        """Machine-readable reason code; baselines keep BASELINE, adaptive planners override."""
+        return "BASELINE"
+
     def propose(self, domain: SearchDomain, history: list[EpisodeRecord], count: int, seed: int,
                 config: dict[str, Any]) -> list[CandidateProposal]:
         # A fixed seed would replay the same pseudo-random sequence on every stateless call,
@@ -79,6 +83,7 @@ class OptunaPlanner:
 
         proposals: list[CandidateProposal] = []
         reason = self.reason(trained, config)
+        code = self.code(trained, config)
         attempts, limit = 0, self.ask_limit(len(seen), count)
         started = time.monotonic()
         while len(proposals) < count and attempts < limit:
@@ -94,7 +99,7 @@ class OptunaPlanner:
             if key in seen or is_forbidden(domain, conditions):
                 continue
             seen.add(key)
-            proposals.append(CandidateProposal(f"candidate-{len(proposals) + 1}", conditions, reason))
+            proposals.append(CandidateProposal(f"candidate-{len(proposals) + 1}", conditions, reason, code))
         if self.fallback_to_random and len(proposals) < count:
             self._fill_random(domain, seen, proposals, count, step_seed(seed, len(history), "fallback"))
         return proposals
@@ -110,4 +115,4 @@ class OptunaPlanner:
             if key in seen or is_forbidden(domain, conditions):
                 continue
             seen.add(key)
-            proposals.append(CandidateProposal(f"candidate-{len(proposals) + 1}", conditions, self.fallback_reason))
+            proposals.append(CandidateProposal(f"candidate-{len(proposals) + 1}", conditions, self.fallback_reason, "FALLBACK"))
