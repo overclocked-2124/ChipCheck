@@ -820,7 +820,13 @@ class Backend:
             contract_json = conn.execute("SELECT canonical_json FROM contract_versions WHERE id = ?",
                                          (campaign["contract_version_id"],)).fetchone()["canonical_json"]
             fixture = self._fixture(conn, fixture_id)
+            sequence = conn.execute("SELECT planner_sequence FROM candidates WHERE id = ?",
+                                    (episode["candidate_id"],)).fetchone()["planner_sequence"]
+            # Deterministic from the campaign seed and the candidate's sequence, so simulated runs repeat exactly
+            # (NFR-03). Real instruments ignore it.
+            seed = int(_sha256(f"{campaign['seed']}:{sequence}:{episode['attempt']}")[:8], 16)
             return {"leaseId": lease_id, "episodeId": episode["id"], "attempt": episode["attempt"],
+                    "episodeSeed": seed,
                     "contractHash": episode["contract_hash"], "fixtureId": fixture_id,
                     "contract": json.loads(contract_json),
                     "fixtureCapabilities": json.loads(fixture["capabilities_json"]),
@@ -1080,12 +1086,98 @@ class Backend:
         with self.db.transaction() as conn:
             self._campaign(conn, campaign_id)
             rows = conn.execute(
-                "SELECT e.id, e.role, e.requested_json, e.outcome, v.robustness FROM episodes e"
+                "SELECT e.id, e.role, e.linked_episode_id, e.requested_json, e.outcome, v.robustness FROM episodes e"
                 " LEFT JOIN verdicts v ON v.episode_id = e.id WHERE e.campaign_id = ? AND e.state = ?"
                 " ORDER BY e.created_at, e.id", (campaign_id, E.FINALIZED.value)).fetchall()
             return [{"episodeId": r["id"], "role": r["role"], "outcome": r["outcome"],
-                     "conditions": json.loads(r["requested_json"]),
+                     "linkedEpisodeId": r["linked_episode_id"], "conditions": json.loads(r["requested_json"]),
                      "robustness": r["robustness"] if r["outcome"] in ("PASS", "DUT_FAILURE") else None} for r in rows]
+
+    def campaign_contract(self, campaign_id: str) -> dict[str, Any]:
+        """The campaign's contract as canonical JSON (what Decision and the Agent plan against)."""
+        with self.db.transaction() as conn:
+            campaign = self._campaign(conn, campaign_id)
+            row = conn.execute("SELECT canonical_json, contract_hash FROM contract_versions WHERE id = ?",
+                               (campaign["contract_version_id"],)).fetchone()
+            return {"contract": json.loads(row["canonical_json"]), "contractHash": row["contract_hash"]}
+
+    def next_planner_sequence(self, campaign_id: str) -> int:
+        with self.db.transaction() as conn:
+            self._campaign(conn, campaign_id)
+            row = conn.execute("SELECT MAX(planner_sequence) AS m FROM candidates WHERE campaign_id = ?",
+                               (campaign_id,)).fetchone()
+            return 0 if row["m"] is None else row["m"] + 1
+
+    def in_flight_count(self, campaign_id: str) -> int:
+        """Episodes that exist but are not finished: the Agent plans nothing while one is running."""
+        with self.db.transaction() as conn:
+            self._campaign(conn, campaign_id)
+            return conn.execute("SELECT COUNT(*) AS n FROM episodes WHERE campaign_id = ? AND state != ?",
+                                (campaign_id, E.FINALIZED.value)).fetchone()["n"]
+
+    def consecutive_rejections(self, campaign_id: str) -> int:
+        """How many of the most recent candidates in a row were rejected (a planner or contract-design smell)."""
+        with self.db.transaction() as conn:
+            self._campaign(conn, campaign_id)
+            count = 0
+            for row in conn.execute("SELECT state FROM candidates WHERE campaign_id = ? ORDER BY planner_sequence DESC",
+                                    (campaign_id,)):
+                if row["state"] != K.REJECTED.value:
+                    break
+                count += 1
+            return count
+
+    def session_log(self, campaign_id: str, trigger_episode_id: str) -> list[dict[str, Any]]:
+        """Every verification candidate linked to ``trigger_episode_id`` in submission order, with its result.
+
+        ``outcome`` is the episode outcome, ``"REJECTED"`` for a candidate the safety rules refused, or
+        None while the episode is still running. The Agent replays this log to rebuild where it was.
+        """
+        with self.db.transaction() as conn:
+            self._campaign(conn, campaign_id)
+            rows = conn.execute(
+                "SELECT c.planner_sequence, c.role, c.conditions_json, c.state, c.id AS candidate_id,"
+                " e.id AS episode_id, e.outcome FROM candidates c LEFT JOIN episodes e ON e.candidate_id = c.id"
+                " WHERE c.campaign_id = ? AND c.linked_episode_id = ? ORDER BY c.planner_sequence",
+                (campaign_id, trigger_episode_id)).fetchall()
+            return [{"sequence": r["planner_sequence"], "role": r["role"], "conditions": json.loads(r["conditions_json"]),
+                     "outcome": "REJECTED" if r["state"] == K.REJECTED.value else r["outcome"],
+                     "episodeId": r["episode_id"]} for r in rows]
+
+    def record_counterexample(self, campaign_id: str, original_episode_id: str, minimized: dict[str, Any],
+                              intervals: dict[str, Any], reproductions: int, attempts: int,
+                              origin: str = "unknown") -> dict[str, Any]:
+        """Store a confirmed, minimized counterexample (HLD 08 §4). One per original episode."""
+        if origin not in ("seeded", "natural", "unknown"):
+            raise invalid("origin must be seeded, natural or unknown")
+        if not (isinstance(reproductions, int) and isinstance(attempts, int) and 0 <= reproductions <= attempts):
+            raise invalid("reproductions must be between 0 and attempts")
+        with self.db.transaction() as conn:
+            self._campaign(conn, campaign_id)
+            episode = self._episode(conn, original_episode_id)
+            if episode["campaign_id"] != campaign_id:
+                raise invalid("the original episode belongs to another campaign")
+            existing = conn.execute("SELECT id FROM counterexamples WHERE original_episode_id = ?",
+                                    (original_episode_id,)).fetchone()
+            if existing:
+                return {"counterexampleId": existing["id"], "created": False}
+            cx_id = new_id()
+            conn.execute("INSERT INTO counterexamples VALUES (?,?,?,?,?,?,?,?,?)",
+                         (cx_id, campaign_id, original_episode_id, _json(minimized), _json(intervals), reproductions,
+                          attempts, origin, self._ts()))
+            self._event(conn, "campaign", "COUNTEREXAMPLE_RECORDED", campaign_id=campaign_id, episode_id=original_episode_id,
+                        actor=SYSTEM_ACTOR, reason_code="COUNTEREXAMPLE", reason=f"reproduced {reproductions} of {attempts}",
+                        detail={"counterexampleId": cx_id})
+            return {"counterexampleId": cx_id, "created": True}
+
+    def counterexamples(self, campaign_id: str) -> list[dict[str, Any]]:
+        with self.db.transaction() as conn:
+            self._campaign(conn, campaign_id)
+            return [{"id": r["id"], "originalEpisodeId": r["original_episode_id"], "minimized": json.loads(r["minimized_json"]),
+                     "intervals": json.loads(r["intervals_json"]), "reproductions": r["reproductions"],
+                     "attempts": r["attempts"], "origin": r["origin"]}
+                    for r in conn.execute("SELECT * FROM counterexamples WHERE campaign_id = ? ORDER BY created_at, id",
+                                          (campaign_id,))]
 
     def rejected_conditions(self, campaign_id: str) -> list[dict[str, Any]]:
         with self.db.transaction() as conn:

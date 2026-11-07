@@ -197,3 +197,23 @@ def parse_contract(contract: Any, require_oracle: bool = False) -> ContractModel
                                  "control; use a validity rule instead")
     return ContractModel(name, controls, forbidden, budget, observations, requirements, validity,
                          parse_safety(contract["safety"]), plan, dict(setup))
+
+
+def pin_inactive(model: ContractModel, conditions: dict[str, Any]) -> dict[str, Any]:
+    """Hold every control whose ``activeWhen`` is false at its nominal value (HLD 04 §12.1).
+
+    Dependencies are resolved to a fixed point, so a chain of conditions is handled whatever order
+    the controls were declared in.
+    """
+    from activequal.model.predicates import atom_matches
+    result = dict(conditions)
+    for _ in range(len(model.controls) + 1):
+        changed = False
+        for name, control in model.controls.items():
+            if control.active_when is not None and not atom_matches(control.active_when, result):
+                if result[name] != control.nominal:
+                    result[name] = control.nominal
+                    changed = True
+        if not changed:
+            return result
+    return result

@@ -10,7 +10,6 @@ Any doubt about the physical state ends in emergency shutdown and a reported tri
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -174,7 +173,7 @@ class Controller:
             episode_id=episode_id, attempt=claim["attempt"], contract_hash=claim["contractHash"],
             fixture_id=self.fixture_id, conditions=dict(claim["requested"]),
             duration_ms=int(claim["requested"].get("dwellMs", DEFAULT_DWELL_MS)),
-            seed=int(hashlib.sha256(f"{episode_id}:{claim['attempt']}".encode()).hexdigest()[:8], 16))
+            seed=int(claim["episodeSeed"]))
         capture, error, abort, lease_lost = self._execute(lease_id, episode)
 
         trip = None
