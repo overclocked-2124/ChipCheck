@@ -34,3 +34,6 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code agent worktrees
+.claude/worktrees/

@@ -13,7 +13,8 @@ from typing import Any
 
 import optuna
 
-from activequal.model.contract import (CONTINUOUS, ControlSpec, number, options, parse_contract)
+from activequal.model.contract import CONTINUOUS, ControlSpec, parse_contract
+from activequal.model.values import number, options
 from activequal.model.errors import InvalidRequest
 from activequal.model.predicates import atom_matches, rule_matches
 

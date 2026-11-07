@@ -2,18 +2,22 @@
 
 This validates the parts of the contract that every service needs: controls with their
 ranges, steps and nominal values, ``activeWhen`` dependencies, ``forbidden`` rules, the
-campaign budget and the DUT name. The remaining sections (observations, requirements,
-validity, safety) are added with the safety-rule library and the Oracle.
+campaign budget and the DUT name. Observations, requirements, validity rules and safety
+limits are parsed as well. They are mandatory when ``require_oracle`` is set (Backend and
+Oracle); Decision only needs the controls and parses leniently.
 """
 
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from activequal.model.errors import InvalidRequest
 from activequal.model.predicates import validate_atom, validate_rule
+from activequal.model.requirements import (ObservationSpec, RequirementSpec, SafetySpec, ValiditySpec,
+                                           parse_observations, parse_requirements, parse_safety,
+                                           parse_validity)
+from activequal.model.values import number, options
 
 CONTINUOUS = "continuous"
 INTEGER_TYPES = {"integer", "duration"}
@@ -21,29 +25,6 @@ NUMERIC_TYPES = {CONTINUOUS} | INTEGER_TYPES
 MAX_CONTROLS = 12
 MAX_MAGNITUDE = 1e15   # numeric control bounds beyond this are not physical quantities
 MAX_STEPS = 1e12       # keeps Optuna's decimal arithmetic and the grid logic well inside their limits
-
-
-def number(value: Any, name: str) -> float:
-    if isinstance(value, bool):
-        raise InvalidRequest(f"{name} must be a number")
-    try:
-        result = float(value)
-    except (TypeError, ValueError) as exc:
-        raise InvalidRequest(f"{name} must be a number") from exc
-    if not math.isfinite(result):
-        raise InvalidRequest(f"{name} must be finite")
-    return result
-
-
-def options(value: Any, name: str, allowed: set[str] | None = None) -> list[str]:
-    if not isinstance(value, list) or not value or len(value) > 20:
-        raise InvalidRequest(f"{name} must have 1–20 options")
-    result = [str(item).strip().lower() for item in value]
-    if any(not item or len(item) > 60 for item in result) or len(set(result)) != len(result):
-        raise InvalidRequest(f"{name} contains empty or duplicate options")
-    if allowed and any(item not in allowed for item in result):
-        raise InvalidRequest(f"{name} has an unsupported option")
-    return result
 
 
 @dataclass(frozen=True)
@@ -59,6 +40,10 @@ class ControlSpec:
     maximum: float | None = None
     step: float | None = None
     values: tuple[Any, ...] | None = None
+    unit: str | None = None
+    shutdown: float | None = None            # value the control returns to in the safe state
+    slew_per_s_max: float | None = None      # maximum rate of change, in control units per second
+    bind: tuple[str, str] | None = None      # (adapter target, action); the fixture-specific part
 
     @property
     def continuous(self) -> bool:
@@ -71,9 +56,14 @@ class ContractModel:
     controls: dict[str, ControlSpec]
     forbidden: list[dict[str, Any]]
     budget: int
+    observations: dict[str, ObservationSpec] | None = None
+    requirements: list[RequirementSpec] | None = None
+    validity: list[ValiditySpec] | None = None
+    safety: SafetySpec | None = None
+    plan: Any = None                         # campaign.plan: a name or the phase-plan object (HLD 04 §14)
 
 
-def parse_control(name: str, spec: Any) -> ControlSpec:
+def _parse_control(name: str, spec: Any) -> ControlSpec:
     if not isinstance(spec, dict):
         raise InvalidRequest(f"control {name} must be an object")
     kind = spec.get("type")
@@ -118,6 +108,34 @@ def parse_control(name: str, spec: Any) -> ControlSpec:
     raise InvalidRequest(f"control {name} has unsupported type {kind!r}")
 
 
+def _extras(name: str, spec: dict[str, Any]) -> dict[str, Any]:
+    extras: dict[str, Any] = {}
+    if "unit" in spec:
+        if not isinstance(spec["unit"], str) or not spec["unit"].strip() or len(spec["unit"]) > 20:
+            raise InvalidRequest(f"{name}.unit must be a short non-empty string")
+        extras["unit"] = spec["unit"].strip()
+    if "shutdown" in spec:
+        extras["shutdown"] = number(spec["shutdown"], f"{name}.shutdown")
+    if "slewPerSMax" in spec:
+        slew = number(spec["slewPerSMax"], f"{name}.slewPerSMax")
+        if slew <= 0:
+            raise InvalidRequest(f"{name}.slewPerSMax must be positive")
+        extras["slew_per_s_max"] = slew
+    if "bind" in spec:
+        bind = spec["bind"]
+        if (not isinstance(bind, dict) or set(bind) != {"target", "action"}
+                or not all(isinstance(bind[key], str) and bind[key].strip() for key in bind)):
+            raise InvalidRequest(f"{name}.bind needs a target and an action")
+        extras["bind"] = (bind["target"].strip(), bind["action"].strip())
+    return extras
+
+
+def parse_control(name: str, spec: Any) -> ControlSpec:
+    control = _parse_control(name, spec)
+    extras = _extras(name, spec)
+    return replace(control, **extras) if extras else control
+
+
 def check_activation(controls: dict[str, ControlSpec]) -> None:
     known = set(controls)
     for name, control in controls.items():
@@ -136,7 +154,7 @@ def check_activation(controls: dict[str, ControlSpec]) -> None:
             current = atom["control"]
 
 
-def parse_contract(contract: Any) -> ContractModel:
+def parse_contract(contract: Any, require_oracle: bool = False) -> ContractModel:
     if not isinstance(contract, dict) or contract.get("contractVersion") != 2:
         raise InvalidRequest("contract must be an object with contractVersion 2")
     raw = contract.get("controls")
@@ -157,4 +175,24 @@ def parse_contract(contract: Any) -> ContractModel:
     name = str(setup.get("dut", "")).strip() if isinstance(setup, dict) else ""
     if not name:
         raise InvalidRequest("contract.setup.dut is required")
-    return ContractModel(name, controls, forbidden, budget)
+    plan = campaign.get("plan")
+    if plan is not None and not isinstance(plan, (str, dict)):
+        raise InvalidRequest("contract.campaign.plan must be a name or an object")
+    model = ContractModel(name, controls, forbidden, budget, plan=plan)
+    oracle_sections = ("observations", "requirements", "safety")
+    if not require_oracle and not any(key in contract for key in oracle_sections + ("validity",)):
+        return model
+    missing = [key for key in oracle_sections if key not in contract]
+    if missing:
+        raise InvalidRequest(f"contract is missing {', '.join(missing)}")
+    observations = parse_observations(contract["observations"], set(controls))
+    requirements = parse_requirements(contract["requirements"], observations)
+    numeric = {key for key, control in controls.items() if control.minimum is not None}
+    validity = parse_validity(contract.get("validity"), observations, numeric)
+    tracked = {rule.metric for rule in validity}
+    for requirement in requirements:
+        if requirement.metric in tracked:   # a requirement on a swept rail would make legal commands fail (HLD 04 §12.1)
+            raise InvalidRequest(f"requirement {requirement.id!r} is on {requirement.metric!r}, which tracks a "
+                                 "control; use a validity rule instead")
+    return ContractModel(name, controls, forbidden, budget, observations, requirements, validity,
+                         parse_safety(contract["safety"]), plan)
