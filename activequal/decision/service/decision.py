@@ -13,8 +13,8 @@ from typing import Any
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from domain import InvalidRequest, domain_from_contract, domain_from_setup, parse_history
-from planners import PLANNER_REGISTRY
+from activequal.decision.service.domain import InvalidRequest, domain_from_contract, domain_from_setup, parse_history
+from activequal.decision.service.planners import PLANNER_REGISTRY
 
 __all__ = ["InvalidRequest", "propose"]
 
@@ -40,9 +40,13 @@ def propose(request: dict[str, Any]) -> dict[str, Any]:
         raise InvalidRequest("count must be 1–10 and warmupTrials must be positive")
     history = parse_history(domain, request.get("history", []))
     usable = sum(1 for item in history if item.outcome in {"PASS", "DUT_FAILURE"})
-    proposals = planner.propose(domain, history, min(count, domain.budget), seed, {"warmupTrials": warmup})
+    config: dict[str, Any] = {"warmupTrials": warmup}
+    if "candidates" in request:  # operator-chosen points, read only by the manual planner
+        config["candidates"] = request["candidates"]
+    proposals = planner.propose(domain, history, min(count, domain.budget), seed, config)
     return {"source": "decision", "method": method, "setupName": domain.name, "historyUsed": usable,
-            "tests": [{"id": item.id, "conditions": item.conditions, "reason": item.reason} for item in proposals]}
+            "tests": [{"id": item.id, "conditions": item.conditions, "reason": item.reason,
+                       "reasonCode": item.code} for item in proposals]}
 
 
 class Handler(BaseHTTPRequestHandler):

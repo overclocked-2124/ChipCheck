@@ -10,7 +10,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
+!activequal/console/ui/src/lib/
 lib64/
 parts/
 sdist/
@@ -34,3 +35,6 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code agent worktrees
+.claude/worktrees/

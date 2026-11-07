@@ -96,7 +96,7 @@ Physical operations are never retried automatically (HLD 03 §17).
 - **Determinism:** the same request returns the same response. Per-call sampler seeds are derived by hashing the campaign seed with the history length, so campaigns with nearby seeds stay independent.
 - **Inputs never include** the seeded fault trigger, the private ground-truth marker, or any field outside the contract's public observations.
 
-Agent submits a returned candidate with `POST /v1/campaigns/{id}/candidates` (internal), idempotency key `campaignId + plannerSequence` (HLD 03 §16).
+Agent submits a returned candidate with the Backend candidate submission (an in-process call inside the control plane; no HTTP route), idempotency key `campaignId + plannerSequence` (HLD 03 §16).
 
 ## 7. Bench-facing API (pull model)
 
@@ -197,7 +197,7 @@ Values are starting points to be replaced by bench measurements (HLD 03 §21 own
 
 ```text
 Agent   -> Decision      propose(...)                       -> candidate c17 (TPE, reason)
-Agent   -> Backend       POST /campaigns/{id}/candidates    key=campaign+17 -> APPROVED, episode e42 AVAILABLE
+Agent   -> Backend       submit_candidate (in-process) key=campaign+17 -> APPROVED, episode e42 AVAILABLE
 Bench   -> Backend       POST /bench/claim                  -> lease L9, candidate, contractHash
 Bench   -> MCU           HELLO / SET_LIMITS / LOAD_PLAN      <- ACK, ACK (limits read back), ACK
 Bench   -> MCU           SET_RAIL oled 3.24 / ENABLE_RAIL    <- MEASUREMENT 3.238 V (settled)

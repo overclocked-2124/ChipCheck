@@ -37,3 +37,17 @@ ChipCheck is a hardware-in-the-loop (HIL) test station that:
 - [SWE Handoff: Software-First POC, Plug-and-Play Planners & Hardware Integration](./docs/SWE-POC-HANDOFF.md)
 
 The HLD documents define the current design and service boundaries. The methodology and proposal documents provide background; where they differ from the HLDs, the HLDs win.
+
+## Run it (no GPU or hardware needed)
+
+```bash
+uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e ".[dev]"
+.venv/bin/python -m unittest discover -s activequal -t .          # full suite
+.venv/bin/python -m activequal.tools.benchmark --campaigns 20      # planner comparison on the simulator
+.venv/bin/python -m activequal.service.app --init                  # config, operator token, reviewer passphrase
+.venv/bin/python -m activequal.service.app                         # control plane on 127.0.0.1
+.venv/bin/python -m activequal.controller.service.app --fixture-id bench-A --token-file <token> --mode sim
+cd activequal/console/ui && npm ci && npm run dev                  # Console
+```
+
+The optional `gp` planner needs `.[gp]` (torch, CPU is enough). Real serial benches use `--mode serial --port /dev/ttyACM0` with `.[serial]`; that path is tested only against the MCU emulator.

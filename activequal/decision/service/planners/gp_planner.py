@@ -4,7 +4,7 @@ import warnings
 
 import optuna
 
-from domain import InvalidRequest
+from activequal.decision.service.domain import InvalidRequest
 
 from .base import OptunaPlanner
 
@@ -38,3 +38,6 @@ class GPPlanner(OptunaPlanner):
         if trained >= config["warmupTrials"]:
             return "GP model selected this from prior measured robustness"
         return "Startup coverage before adaptive feedback"
+
+    def code(self, trained, config):
+        return "MODEL" if trained >= config["warmupTrials"] else "STARTUP"
