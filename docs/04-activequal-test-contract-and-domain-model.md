@@ -266,7 +266,7 @@ Robustness is the minimum margin across applicable requirements, following signa
 
 A missing required observation always produces `INVALID_EXPERIMENT`, never a margin. Classification follows the order in HLD 03 §15.1.
 
-**Open decision:** Who sets each requirement's `nominal` and each observation's `uncertainty`. `U` must come from calibration of the selected bench, not from this example.
+**ActiveQual decision (2026-11-06):** the research lead proposes each requirement's `nominal` from the DUT's public specification. The hardware and safety lead sets each observation's `uncertainty` as U = 2σ from the fixture's calibration record (HLD 06 §6). Both go through the two-person review for contract changes. Until a calibration exists, the HLD 02 §19.2 planning value (U = 6 ms for OLED latency) is used in the simulator only; `U` must come from calibration of the selected bench before any physical campaign.
 
 ## 14. Campaign Phase Plan
 
@@ -274,33 +274,29 @@ A missing required observation always produces `INVALID_EXPERIMENT`, never a mar
 
 ```json
 "plan": {
-  "discoveryBudget": 30, "verificationBudget": 16,
-  "init": {"minFraction": 0.2, "maxFraction": 0.35, "design": "pairwise+sobol", "include": ["nominal", "corners"]},
-  "explore": {"forcedEveryN": 5},
+  "discoveryBudget": 50, "verificationBudget": 24,
+  "init": {"enabled": false, "minFraction": 0.2, "maxFraction": 0.35, "design": "pairwise+sobol", "include": ["nominal", "corners"]},
   "confirm": {"maxReplays": 3, "confirmIfFails": 2},
-  "minimize": {"order": "discrete_then_continuous", "bracket": "expand_then_bisect"},
+  "minimize": {"order": "discrete_then_continuous", "bracket": "expand_then_bisect", "necessityProbes": true},
   "onConfirmed": "stop",
   "stop": {"consecutiveInvalid": 3, "noFeasibleCandidate": true}
 }
 ```
 
-1. **Coverage.** A pairwise covering array over the categorical and Boolean controls, with nominal and corner values folded into its rows and Sobol points for continuous values. Size is the larger of the array and 20% of the discovery budget, capped at 35%.
+1. **Coverage (optional, off by default).** When `init.enabled` is true: a pairwise covering array over the categorical and Boolean controls, with nominal and corner values folded into its rows and Sobol points for continuous values. Size is the larger of the array and 20% of the discovery budget, capped at 35%.
 2. **Adaptive hunting.** The selected planner proposes the remaining discovery episodes. Repeated rejection of its candidates stops the campaign with a visible planner-failure reason.
-3. **Verification**, started only by a guard-banded failure. Replay up to three times: two failures confirm, two initial passes mark the failure transient, a split result is decided by the third replay. Then return each non-nominal control to `nominal` one at a time, keeping changes that preserve the failure, and bracket each remaining continuous control by expanding outward until a pass and then bisecting. When the verification budget runs out, the interval is reported at its achieved resolution.
+3. **Verification**, started only by a guard-banded failure. Replay up to three times: two failures confirm, two initial passes mark the failure transient, a split result is decided by the third replay. Then return each non-nominal control to `nominal` one at a time, keeping changes that preserve the failure; flip each discrete control already at `nominal` once (a necessity probe) to show whether its nominal value is required; and bracket each remaining continuous control by expanding outward until a pass and then bisecting. When the verification budget runs out, the interval is reported at its achieved resolution.
 
 The campaign's declared budget (§9) is the sum of the two pools, so verification always fits inside it. Every physical episode counts against its pool, including invalid and inconclusive ones; rejected candidates do not. Tests-to-first-failure is measured on the discovery pool only, so every planner receives the same verification treatment. Reports state the total episodes used, not only the discovery budget. With `onConfirmed: "continue"`, the confirmed region is excluded from later proposals by Decision so the planner looks for a distinct failure.
 
-**Recommended, pending review:**
+**ActiveQual decision (2026-11-06), from the simulation evidence in HLD 06 §4, §5 and §7:**
 
-- `forcedEveryN` applies equally to every adaptive planner and is fixed before comparison runs, or is removed.
-- Baselines (random, grid) run without the coverage phase; a separate "coverage then random" run isolates the effect of the coverage phase.
+- **Forced exploration removed.** It never improved discovery and was significantly worse on B1w (79% vs 83%, p = 0.046).
+- **Coverage is optional and off by default.** Gains on B1a and B1w were not significant; on B1b it was significantly worse (25% vs 35% within 30 episodes, p = 0.004). Whenever coverage is used in a comparison, the same setting applies to every planner and is pre-registered (HLD 06 §9).
+- **Necessity probes on.** Minimizing toward nominal cannot show that a control already at `nominal` is required (green LED: 0% found without probes, 100% with); each probe costs about one episode.
+- **Default budgets: 50 discovery, 24 verification.** A 16-episode verification pool ran out on wide windows in 47% of cases; 20 ran out in 0%, and 24 leaves room for the probes. A 50-episode discovery pool gives about 95% power at 20 campaigns per planner (HLD 06 §8).
 
-**Evidence since ratification (HLD 06 §4 and §7), pending a team decision:**
-
-- Forced exploration never improved discovery in simulation and was significantly worse on one benchmark. Recommendation: remove `forcedEveryN`.
-- The pairwise coverage phase gave small, non-significant gains on two benchmarks and was significantly worse on one (25% vs 35% discovery within 30 episodes). Recommendation: make coverage an optional setting, off by default.
-- Minimizing toward nominal cannot show that a condition already at its nominal value is necessary (for example, green LED off). Recommendation: add one necessity probe per such discrete control, at a cost of about one episode each.
-- A 16-episode verification budget was enough for a narrow failure window but ran out for wider windows. Recommendation: 24 episodes.
+The defaults apply to simulator and hardware campaigns alike; a campaign may override them in its contract, and the override is reviewed with the limits.
 
 ## 15. Decisions and Open Questions
 
@@ -311,8 +307,7 @@ The following details remain open until the exact bench setup is confirmed:
 - Which supply channels, measurement instruments, and peripherals will be used.
 - The reviewed voltage, current, temperature, timing, and shutdown limits for those parts.
 - Which signals the fixture can measure reliably and how their calibration is recorded.
-- The exact discovery and verification budgets for each campaign; §14 fixes the structure and defaults, not the bench-specific values.
 - Each requirement's `nominal` and each observation's measurement `uncertainty` (§13).
 - Which additional small setup changes should be compared with the OLED example.
 
-These values should be filled from the selected hardware and bench review, not guessed from the example. Keep earlier results tied to the setup that produced them.
+HLD 02 §19.2 gives planning estimates for these values, derived from datasheets, so the simulator, the Controller and the test vectors can be built before the bench exists. They are not reviewed limits: replace them with the selected hardware's values and the WP5 measurements (HLD 10) before any physical campaign. Keep earlier results tied to the setup that produced them.

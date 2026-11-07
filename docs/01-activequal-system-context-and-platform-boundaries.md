@@ -465,7 +465,7 @@ Processes remain separate where the deployment table specifies a boundary, even 
 | Episode lifecycle and lease transitions | Explicit persisted state machine with idempotent result submission | HLD 03: Episode Execution and Safety State Machine |
 | Test-contract protobuf structure | Typed variables, units, constraints, transitions, oracle rules, and budget | HLD 04: Test Contract and Domain Model |
 | Bench-agent RPC surface | Claim, heartbeat, renew, submit, abort acknowledgement, and fixture health | HLD 05: APIs and Instrumentation Protocols |
-| Decision Service planner interface and adaptive methods | **Decided:** common candidate-selection interface with multivariate TPE and GP-BO as adaptive methods and random as baseline. Open: coverage settings, primary metric, benchmark sizing | HLD 06: Adaptive Search and Research Evaluation |
+| Decision Service planner interface and adaptive methods | **Decided:** common candidate-selection interface with multivariate TPE and GP-BO as adaptive methods and random as baseline. **Decided 2026-11-06:** TPE as the demo default, coverage optional and off by default, log-rank primary metric, wide-island demo benchmark at a 50-episode budget (HLD 06 §11) | HLD 06: Adaptive Search and Research Evaluation |
 | Machine authentication | Reuse a verified service identity suitable for the local Controller Service | HLD 07: Security and Deployment |
 | Trace storage mechanism | Local filesystem for MVP behind an interface; object storage later | HLD 08: Persistence and Observability |
 

@@ -49,7 +49,7 @@ Moving a file into the main Documents folder means it is accepted as the current
 |---:|---|---|---|
 | 00 | HLD Document Map | Which document owns each design topic, and in what order should the documents be read? | Approved |
 | 01 | System Context and Platform Boundaries | What is ActiveQual, who uses it, which services exist, and where are the application, bench, and hardware boundaries? | Approved; 2026-11-05 stack amendment in review |
-| 02 | Hardware Architecture | How are the DUT, power rails, test controller, measurements, signal protection, and physical safety mechanisms connected? | Approved; 2026-11-05 part research in review |
+| 02 | Hardware Architecture | How are the DUT, power rails, test controller, measurements, signal protection, and physical safety mechanisms connected? | Approved; 2026-11-05 part research and 2026-11-06 planning estimates in review |
 | 03 | Episode Execution and Safety State Machine | How does a campaign and one physical experiment move from proposal through safety validation, execution, shutdown, classification, and recovery? | Initial draft |
 | 04 | Test Contract and Domain Model | How does a DUT declare variables, legal ranges, constraints, workloads, observations, failure rules, budgets, and compatible fixtures? | Initial draft |
 | 05 | APIs and Instrumentation Protocols | What RPCs and device messages connect the Console, BFF, Backend, Agent, Controller, Adapter, test controller, and DUT? | Initial draft |
@@ -342,3 +342,4 @@ Use these terms consistently:
 |---|---|
 | 2026-09-10 | Created the document map, numbering convention, topic ownership, standard HLD structure, and initial status table |
 | 2026-11-05 | Added initial drafts of HLDs 05–10; recorded HLD 01 and 02 additions as in review |
+| 2026-11-06 | Open decisions in HLDs 04–10 resolved and HLD 02 planning estimates added; statuses stay draft until team review |
