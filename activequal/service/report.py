@@ -277,6 +277,12 @@ def build_report(backend: Backend, campaign_id: str) -> dict[str, Any]:
         claims.append({"claim": f"counterexample {c['id']}: {c['reproduction']['numerator']}/"
                                 f"{c['reproduction']['denominator']} replays failed again",
                        "episodeIds": c["episodeIds"]})
+    if stop:
+        claims.append({"claim": f"the campaign ended {stop['state']}: {stop['reason']}", "episodeIds": [],
+                       "eventIds": [stop["eventId"]]})
+    if rejected:
+        claims.append({"claim": f"{len(rejected)} candidate(s) were refused by the safety rules before running",
+                       "episodeIds": [], "candidateIds": [r["candidateId"] for r in rejected]})
     if metrics["episodesToFirstConfirmedFailure"] is not None:
         claims.append({"claim": f"first confirmed failure at discovery episode {metrics['episodesToFirstConfirmedFailure']}",
                        "episodeIds": [metrics["firstConfirmedFailureEpisodeId"]]})
@@ -456,10 +462,20 @@ def _reasons(outcomes: dict[str, Any]) -> str:
 
 
 def campaign_record(report: dict[str, Any], profile: str) -> dict[str, Any]:
-    """The per-campaign record ``stats.compare_planners`` takes. ``profile`` names the benchmark; Backend does not know it."""
-    return {"planner": report["identity"]["planner"]["method"], "profile": profile,
-            "episodes_to_failure": report["metrics"]["episodesToFirstConfirmedFailure"],
-            "budget": report["budget"]["discovery"]["allowed"]}
+    """The per-campaign record ``stats.compare_planners`` takes. ``profile`` names the benchmark; Backend does not know it.
+
+    A campaign that confirmed a failure is an event at its discovery index. One that did not is censored at the
+    discovery episodes it actually ran: if it stopped early (planner failure, invalid streak, lockout, abort) it
+    must not claim follow-up it never had, so ``budget`` is the smaller of the allowed budget and the episodes used.
+    ``state``, ``stop_reason_code`` and ``stopped_early`` are extra keys the comparison ignores, kept for exclusion lists.
+    """
+    allowed, used = report["budget"]["discovery"]["allowed"], report["budget"]["discovery"]["used"]
+    found = report["metrics"]["episodesToFirstConfirmedFailure"]
+    stop = report["stop"] or {}
+    return {"planner": report["identity"]["planner"]["method"], "profile": profile, "episodes_to_failure": found,
+            "budget": allowed if found is not None else max(1, min(allowed, used)),
+            "state": report["state"], "stop_reason_code": stop.get("reasonCode"),
+            "stopped_early": found is None and used < allowed}
 
 
 # ------------------------------------------------------------------------------ markdown
@@ -505,14 +521,15 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines += ["", f"Invalid: {outcomes['invalid']} (of which {outcomes['inconclusive']} inconclusive inside the guard band; "
                   f"by reason: {_reasons(outcomes)}). Safety aborts: {outcomes['safetyAborts']}. "
                   f"Candidates refused by the safety rules before running: {outcomes['candidatesRejected']['count']}"
-                  + (f" ({', '.join(f'{k} x{v}' for k, v in outcomes['candidatesRejected']['byCode'].items())})"
+                  + (f" ({', '.join(f'{k} x{v}' for k, v in outcomes['candidatesRejected']['byCode'].items())}; "
+                     f"candidates {', '.join(outcomes['candidatesRejected']['candidateIds'])})"
                      if outcomes['candidatesRejected']['count'] else "") + ".", ""]
 
     lines += ["## Stop reason", ""]
     if report["stop"]:
         s = report["stop"]
         lines += [f"The campaign ended {s['state']}"
-                  + (f" ({s['reasonCode']})" if s["reasonCode"] != s["state"] else "") + f": {s['reason']}"]
+                  + (f" ({s['reasonCode']})" if s["reasonCode"] != s["state"] else "") + f": {s['reason']} (event {s['eventId']})"]
     else:
         lines += [f"The campaign has not ended; it is {report['state']}."]
     for lk in report["lockouts"]:
@@ -536,7 +553,10 @@ def render_markdown(report: dict[str, Any]) -> str:
 
     lines += ["## Claims and the episodes behind them", ""]
     for claim in report["claims"]:
-        lines.append(f"- {claim['claim']} (episodes: {_ids(claim['episodeIds'])})")
+        cites = [f"episodes: {_ids(claim['episodeIds'])}"] if claim["episodeIds"] else []
+        cites += [f"event: {', '.join(str(i) for i in claim['eventIds'])}"] if claim.get("eventIds") else []
+        cites += [f"candidates: {', '.join(claim['candidateIds'])}"] if claim.get("candidateIds") else []
+        lines.append(f"- {claim['claim']} ({'; '.join(cites) or 'episodes: none'})")
     lines.append("")
 
     lines += ["## Episode index", "", "| Episode | Seq | Pool | Role | Outcome | Reason code | Robustness | Linked to |",

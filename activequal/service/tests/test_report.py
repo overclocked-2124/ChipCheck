@@ -33,6 +33,15 @@ def clean_rig() -> Rig:
     return rig
 
 
+def safety_rig() -> Rig:
+    """The instrument drops out after the outputs were enabled: the Controller cuts off and the campaign locks out."""
+    from activequal.adapter.service.simulator import FaultInjection, FaultKind
+    rig = Rig("B3", discovery=6, verification=2, planner="random",
+              fault=FaultInjection(FaultKind.INSTRUMENT_DISCONNECT_AFTER_OUTPUT))
+    rig.run()
+    return rig
+
+
 def trace_world() -> tuple[World, dict]:
     """A hand-built finished campaign: a pass carrying a raw trace, a failure with a recorded counterexample,
     and an inconclusive episode. Returns the world and the ids."""
@@ -194,8 +203,9 @@ class FaultCampaign(unittest.TestCase):
         known = {e["episodeId"] for e in self.report["episodes"]}
         self.assertTrue(self.report["claims"])
         for claim in self.report["claims"]:
-            self.assertTrue(claim["episodeIds"], claim)
+            self.assertTrue(claim["episodeIds"] or claim.get("eventIds") or claim.get("candidateIds"), claim)
             self.assertTrue(set(claim["episodeIds"]) <= known, claim)
+        self.assertIn(f"event: {self.report['stop']['eventId']}", self.markdown)
         for statement in self.report["result"]["statements"]:
             self.assertTrue(set(statement["episodeIds"]) <= known)
 
@@ -250,6 +260,44 @@ class CleanCampaign(unittest.TestCase):
 
     def test_stop_reason(self):
         self.assertIn("discovery budget of 8 episodes used", self.report["stop"]["reason"])
+
+
+class SafetyAbortCampaign(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.rig = safety_rig()
+        cls.cid = cls.rig.world.campaign_id
+        cls.report = rep.build_report(cls.rig.backend, cls.cid)
+        cls.markdown = rep.render_markdown(cls.report)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.rig.close()
+
+    def test_safety_abort_is_reported_and_locks_out(self):
+        r = self.report
+        self.assertEqual(r["state"], "LOCKED_OUT")
+        self.assertFalse(r["partial"])
+        self.assertEqual(r["stop"]["state"], "LOCKED_OUT")
+        self.assertGreaterEqual(r["outcomes"]["safetyAborts"], 1)
+        self.assertEqual(r["result"]["kind"], rep.KIND_SAFETY_ABORT)
+        self.assertTrue(r["result"]["headline"].startswith("Safety abort:"))
+        self.assertNotIn(rep.NO_FAILURE_SENTENCE, self.markdown)
+        self.assertNotIn("IN_FLIGHT", r["outcomes"]["counts"])      # the tripped episode is finalized, not left in flight
+        self.assertTrue(r["lockouts"])
+        self.assertIn("Lockout at", self.markdown)
+        aborted = r["outcomes"]["episodeIds"]["SAFETY_ABORT"]
+        for episode_id in aborted:
+            self.assertIn(episode_id, self.markdown)
+        self.assertEqual(r["metrics"]["episodesToFirstConfirmedFailure"], None)
+
+    def test_early_stop_is_censored_at_the_episodes_actually_run(self):
+        record = rep.campaign_record(self.report, "B3")
+        used = self.report["budget"]["discovery"]["used"]
+        self.assertLess(used, 6)
+        self.assertEqual(record["budget"], used)
+        self.assertTrue(record["stopped_early"])
+        self.assertEqual(record["state"], "LOCKED_OUT")
 
 
 class HandBuiltCampaign(unittest.TestCase):
@@ -348,11 +396,14 @@ class PlannerBatch(unittest.TestCase):
                     rig.close()
         self.assertEqual(len(records), 12)
         for record, report in zip(records, reports):
-            self.assertEqual(record["budget"], 15)
+            self.assertEqual(record["budget"], 15 if record["episodes_to_failure"] is not None
+                             else max(1, min(15, report["budget"]["discovery"]["used"])))
             self.assertEqual(record["episodes_to_failure"], report["metrics"]["episodesToFirstConfirmedFailure"])
             if record["episodes_to_failure"] is not None:
                 self.assertLessEqual(record["episodes_to_failure"], 15)
             self.assertLessEqual(report["budget"]["discovery"]["used"], 15)
+        print("episodes_to_failure by campaign:", [(r["planner"], r["episodes_to_failure"]) for r in records])
+        self.assertTrue(any(r["episodes_to_failure"] is not None for r in records), "no campaign confirmed a failure")
         out = stats.compare_planners(records, checkpoints=(10, 15))
         groups = out["profiles"]["B1w"]["planners"]
         self.assertEqual({g: groups[g]["campaigns"] for g in groups}, {"random": 6, "tpe": 6})

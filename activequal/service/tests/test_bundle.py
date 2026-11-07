@@ -10,7 +10,7 @@ from pathlib import Path
 from activequal.service import bundle
 from activequal.service import report as rep
 from activequal.service.tests.support import SAM, World
-from activequal.service.tests.test_report import FAIL_CONDITIONS, clean_rig, fault_rig, trace_world
+from activequal.service.tests.test_report import FAIL_CONDITIONS, clean_rig, fault_rig, safety_rig, trace_world
 
 # Anything that would reveal the simulator: profile names, its module, constants and injection vocabulary.
 LEAK_PATTERNS = (r"\bB1[abw]\b", r"\bB2\b", r"\bB3\b", r"(?i)simulat", r"(?i)noise_seed", r"(?i)FaultInjection",
@@ -31,10 +31,12 @@ class Exported(unittest.TestCase):
         cls.fault = fault_rig()
         cls.clean = clean_rig()
         cls.hand, cls.ids = trace_world()
+        cls.safety = safety_rig()
         cls.dirs = {}
         for name, backend, cid in (("fault", cls.fault.backend, cls.fault.world.campaign_id),
                                    ("clean", cls.clean.backend, cls.clean.world.campaign_id),
-                                   ("hand", cls.hand.backend, cls.hand.campaign_id)):
+                                   ("hand", cls.hand.backend, cls.hand.campaign_id),
+                                   ("safety", cls.safety.backend, cls.safety.world.campaign_id)):
             cls.dirs[name] = base / name
             bundle.export_bundle(backend, cid, cls.dirs[name])
 
@@ -43,6 +45,7 @@ class Exported(unittest.TestCase):
         cls.fault.close()
         cls.clean.close()
         cls.hand.close()
+        cls.safety.close()
         cls.tmp.cleanup()
 
 
@@ -137,6 +140,20 @@ class RoundTrip(Exported):
 
     def test_clean_report_in_bundle_has_honest_sentence(self):
         self.assertIn(rep.NO_FAILURE_SENTENCE, (self.dirs["clean"] / "report.md").read_text())
+
+
+class LockedOutExport(Exported):
+    def test_locked_out_campaign_exports_as_terminal(self):
+        manifest = json.loads((self.dirs["safety"] / "manifest.json").read_text())
+        self.assertEqual(manifest["campaignState"], "LOCKED_OUT")
+        self.assertFalse(manifest["partial"])
+        self.assertEqual(manifest["stop"]["state"], "LOCKED_OUT")
+        report = json.loads((self.dirs["safety"] / "report.json").read_text())
+        self.assertEqual(report["result"]["kind"], rep.KIND_SAFETY_ABORT)
+        rows = [json.loads(l) for l in (self.dirs["safety"] / "episodes.jsonl").read_text().splitlines()]
+        self.assertIn("SAFETY_ABORT", {r["outcome"] for r in rows})
+        self.assertNotIn(None, {r["outcome"] for r in rows})
+        self.assertIn(rep.KIND_SAFETY_ABORT, (self.dirs["safety"] / "report.json").read_text())
 
 
 class Tamper(Exported):
