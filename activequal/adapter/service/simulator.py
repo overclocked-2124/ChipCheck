@@ -41,6 +41,7 @@ from activequal.adapter.service.types import (ApprovedEpisode, BenchEvent, Bench
 
 VOLT_MIN, VOLT_STEP, VOLT_COUNT = 3.00, 0.01, 61
 WORKLOADS = ("idle", "oled_refresh", "sensor_read", "wifi_tx", "flash_write")
+FAULT_MIN_DWELL_MS = 300
 PROFILE_NAMES = ("B1a", "B1b", "B1w", "B2", "B3")
 
 BASE_LATENCY_MS = 31.0
@@ -204,6 +205,8 @@ class SimulatedBenchAdapter:
     def _latency_mean(self, conditions: dict[str, Any], index: int) -> float:
         if self._p.half_width_steps is None:
             return BASE_LATENCY_MS
+        if conditions.get("dwellMs", FAULT_MIN_DWELL_MS) < FAULT_MIN_DWELL_MS:
+            return BASE_LATENCY_MS            # PRD §17.2: the fault needs the condition held for at least 300 ms
         wrong = int(not conditions["redLed"]) + int(bool(conditions["greenLed"]))
         scale = (1.0, self._p.wrong_one_led, self._p.wrong_both_led)[wrong]
         bump = math.exp(-((index - _CENTER_INDEX) / self._bump_width) ** 2)

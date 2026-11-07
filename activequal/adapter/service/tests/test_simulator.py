@@ -70,6 +70,11 @@ class SurfaceTests(unittest.TestCase):
         self.assertEqual(SimulatedBenchAdapter("B2").expected_observations(TARGET)["oledLatencyMs"], 31.0)
         self.assertEqual(SimulatedBenchAdapter("B3").expected_observations(TARGET)["oledLatencyMs"], 31.0)
 
+    def test_short_dwell_does_not_trigger_the_fault(self) -> None:
+        adapter = SimulatedBenchAdapter("B1w")
+        self.assertGreater(adapter.expected_observations({**TARGET, "dwellMs": 300})["oledLatencyMs"], 120.0)
+        self.assertEqual(adapter.expected_observations({**TARGET, "dwellMs": 200})["oledLatencyMs"], 31.0)
+
     def test_cliff_has_no_precursor(self) -> None:
         adapter = SimulatedBenchAdapter("B2")
         for volts in (3.10, 3.14, 3.19, 3.20):
