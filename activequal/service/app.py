@@ -68,7 +68,8 @@ def build(config: dict[str, Any], auth: AuthConfig, software_version: str):
 
     backend = Backend(Database(config["database"]), config["traceDir"], software_version=software_version)
     runner = AgentRunner(backend, propose)
-    exporter = None            # report export is wired in once WP15 lands
+    from activequal.service.exporter import make_exporter
+    exporter = make_exporter(Path(config["database"]).parent / "exports")
     return backend, runner, Api(backend, auth, propose, runner, exporter)
 
 

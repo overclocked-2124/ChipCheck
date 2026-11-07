@@ -13,11 +13,14 @@ This document defines how ActiveQual is built and verified within the 12-week pr
 
 | Area | State |
 |---|---|
-| Decision Service | Built: contract v2 domain, planner registry (`tpe`, `gp`, `random`, `grid`), fixes and property tests (21 tests) |
-| Console | Setup wizard and proposal preview via Next.js server routes; no campaign flow |
-| Backend, Agent, Oracle, safety kernel | Not started |
-| Controller, Adapter, simulator adapter | Not started |
-| Test-controller and DUT firmware | Not started |
+| Model, safety library, Oracle | Built: contract v2 parser, RFC 8785 canonical hash, fail-closed safety rules, Oracle classification and margins |
+| Backend and control plane | Built: SQLite state, contracts with approvals, fixtures, calibration, lease, campaigns, results, HTTP API with SSE, auth, report and evidence-bundle export |
+| Decision Service | Built: `tpe`, `gp`, `random`, `grid`, `fixed_corner`, `coverage`, `manual`; property tests |
+| Agent | Built: phase plan, replayable verification sessions (confirm, minimize, necessity, bracket) |
+| Controller, Adapter | Built: Controller with spool, simulated bench (profiles B1a/B1b/B1w/B2/B3), serial protocol, MCU emulator and serial host adapter (tested against the emulator only) |
+| Tools | Built: benchmark CLI, full-stack parity check, report and bundle export |
+| Console | Built: contracts, fixtures, campaign creation, live campaign page, results; not yet browser-verified end to end |
+| Test-controller and DUT firmware | Not started (human work) |
 | Hardware | Parts and reviewed limits open (HLD 02 §20); datasheet-based planning estimates in HLD 02 §19.2 |
 
 ## 3. Test layers
