@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
+import { Shell } from "@/components/shell";
 import "./styles.css";
 
 export const metadata: Metadata = {
-  title: "ChipCheck Console",
-  description: "Configure a hardware test setup and review proposed tests"
+  title: "ActiveQual Console",
+  description: "Adaptive physical testing: contracts, fixtures, campaigns and results",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body><Shell>{children}</Shell></body>
+    </html>
+  );
 }
