@@ -817,8 +817,13 @@ class Backend:
                  isoformat(now)))
             self._move_episode(conn, episode, E.LEASED, actor=SYSTEM_ACTOR, reason_code="LEASE_ISSUED",
                                reason=f"leased to {controller_instance_id}")
+            contract_json = conn.execute("SELECT canonical_json FROM contract_versions WHERE id = ?",
+                                         (campaign["contract_version_id"],)).fetchone()["canonical_json"]
+            fixture = self._fixture(conn, fixture_id)
             return {"leaseId": lease_id, "episodeId": episode["id"], "attempt": episode["attempt"],
                     "contractHash": episode["contract_hash"], "fixtureId": fixture_id,
+                    "contract": json.loads(contract_json),
+                    "fixtureCapabilities": json.loads(fixture["capabilities_json"]),
                     "requested": json.loads(episode["requested_json"]),
                     "role": episode["role"], "leaseExpiresAt": isoformat(now + timedelta(seconds=self.lease_ttl_s)),
                     "maxEpisodeS": model.safety.max_episode_s,

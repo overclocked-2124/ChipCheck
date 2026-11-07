@@ -89,4 +89,6 @@ class BenchHealth:
     locked_out: bool = False
     dut_connected: bool = True
     instruments_connected: bool = True
+    dut_firmware_sha256: str | None = None      # identities read back from the DUT and the test controller
+    mcu_firmware_sha256: str | None = None
     detail: tuple[str, ...] = field(default_factory=tuple)

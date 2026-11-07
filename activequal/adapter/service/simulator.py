@@ -130,7 +130,10 @@ class SimulatedBenchAdapter:
     """``BenchAdapter`` implementation over synthetic physics."""
 
     def __init__(self, profile: str = "B3", noise_seed: int = 0, latency_sigma_ms: float = LATENCY_SIGMA_MS,
-                 fault: FaultInjection | None = None) -> None:
+                 fault: FaultInjection | None = None, dut_firmware_sha256: str = "0" * 64,
+                 mcu_firmware_sha256: str = "m" * 64) -> None:
+        self.dut_firmware_sha256 = dut_firmware_sha256
+        self.mcu_firmware_sha256 = mcu_firmware_sha256
         key = profile.upper()
         if key not in _PROFILES:
             raise ValueError(f"profile must be one of {', '.join(PROFILE_NAMES)}")
@@ -148,8 +151,11 @@ class SimulatedBenchAdapter:
     def health_check(self) -> BenchHealth:
         if self._locked_out:
             return BenchHealth(ok=False, estop_released=False, locked_out=True,
+                               dut_firmware_sha256=self.dut_firmware_sha256,
+                               mcu_firmware_sha256=self.mcu_firmware_sha256,
                                detail=("cutoff lockout latched; manual interlock reset required",))
-        return BenchHealth(ok=True)
+        return BenchHealth(ok=True, dut_firmware_sha256=self.dut_firmware_sha256,
+                           mcu_firmware_sha256=self.mcu_firmware_sha256)
 
     def emergency_shutdown(self) -> None:
         self._locked_out = True
