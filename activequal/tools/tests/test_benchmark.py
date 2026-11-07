@@ -115,13 +115,13 @@ class CliTests(unittest.TestCase):
         self.assertEqual(report["checkpoints"], [5])
         self.assertEqual(report["cells"][0]["campaigns"], 3)
 
-    def test_planners_come_from_registry_without_gp(self) -> None:
+    def test_planners_come_from_registry_without_gp_and_manual(self) -> None:
         _, registry, _ = benchmark._decision()
         out = io.StringIO()
         with redirect_stdout(out):
             main(["--profiles", "B3", "--campaigns", "1", "--budget", "2", "--json"])
         names = [cell["planner"] for cell in json.loads(out.getvalue())["cells"]]
-        self.assertEqual(names, [n for n in registry if n != "gp"])
+        self.assertEqual(names, [n for n in registry if n not in ("gp", "manual")])
 
     def test_unknown_planner_is_rejected(self) -> None:
         with self.assertRaises(SystemExit), redirect_stdout(io.StringIO()):

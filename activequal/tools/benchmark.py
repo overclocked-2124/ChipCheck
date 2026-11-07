@@ -198,12 +198,16 @@ def format_table(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+# Planners that cannot run without per-campaign configuration (operator-chosen candidates).
+NEEDS_CONFIG = frozenset({"manual"})
+
+
 def main(argv: list[str] | None = None) -> int:
     _, registry, _ = _decision()
     parser = argparse.ArgumentParser(prog="python -m activequal.tools.benchmark", description=__doc__.splitlines()[0])
     parser.add_argument("--campaigns", type=int, default=100)
     parser.add_argument("--budget", type=int, default=50)
-    parser.add_argument("--planners", help=f"comma list; default all registered except gp ({', '.join(registry)})")
+    parser.add_argument("--planners", help=f"comma list; default all registered except gp and manual ({', '.join(registry)})")
     parser.add_argument("--include-gp", action="store_true", help="also run the slow gp planner (needs torch)")
     parser.add_argument("--profiles", default=",".join(PROFILE_NAMES))
     parser.add_argument("--seed", type=int, default=42)
@@ -214,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     planners = [p.strip() for p in args.planners.split(",")] if args.planners else \
-        [name for name in registry if name != "gp" or args.include_gp]
+        [name for name in registry if name not in NEEDS_CONFIG and (name != "gp" or args.include_gp)]
     profiles = [p.strip() for p in args.profiles.split(",")]
     for name in planners:
         if name not in registry:
