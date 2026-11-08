@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { MotionConfig, motion } from "motion/react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useLoad, useNow, useReachability } from "@/components/api";
+import { TooltipProvider } from "@/components/controls";
 import { actorCookie, readActor } from "@/lib/client";
 import { connectionBanner } from "@/lib/live";
 import type { CampaignView } from "@/lib/types";
@@ -79,11 +81,11 @@ export function Shell({ children }: { children: ReactNode }) {
   const locked = campaigns?.filter(c => c.state === "LOCKED_OUT") ?? [];
   const banner = connectionBanner(reach.unreachable ? "unreachable" : "live", null, reach.lastOkAt, now);
   return (
-    <div className="shell">
+    <MotionConfig reducedMotion="user"><TooltipProvider><div className="shell">
       <a className="skip" href="#main">Skip to content</a>
       <aside className="sidebar">
         <Link className="brand" href="/" aria-label="ChipCheck console home">
-          <span className="brand-mark" aria-hidden="true">C<span>•</span></span>
+          <span className="brand-mark" aria-hidden="true">C<i /></span>
           <div><strong>CHIPCHECK</strong><small>Research console</small></div>
         </Link>
         <div className="side-caption">Workspace</div>
@@ -91,7 +93,8 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="side-caption flow-caption">Navigate</div>
         <nav aria-label="Main"><ul className="step-nav">{NAV.map((n, i) => (
           <li key={n.href}><Link href={n.href} className={active === n.href ? "active" : undefined} aria-current={active === n.href ? "page" : undefined}>
-            <span>{String(i + 1).padStart(2, "0")}</span>{n.label}
+            {active === n.href ? <motion.i className="nav-pill" layoutId="nav-pill" transition={{ type: "spring", stiffness: 520, damping: 40 }} aria-hidden="true" /> : null}
+            <span>{String(i + 1).padStart(2, "0")}</span><b>{n.label}</b>
           </Link></li>
         ))}</ul></nav>
         <div className="side-foot">Planner proposes, safety approves.<br /><span>The E-stop is always the fastest way to stop the bench.</span></div>
@@ -111,9 +114,13 @@ export function Shell({ children }: { children: ReactNode }) {
             <Link href={`/campaigns/${c.id}#lockout`}>Open the lockout page</Link>
           </div>
         ))}
-        <main id="main" className="main-inner" tabIndex={-1}>{children}</main>
+        {/* Keyed by route: the page fades in once on navigation, never on data refreshes. */}
+        <motion.main key={path} id="main" className="main-inner" tabIndex={-1}
+          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}>
+          {children}
+        </motion.main>
         <footer className="content-foot"><div><span>ChipCheck / ActiveQual research console</span><span>Requested ≠ measured</span></div></footer>
       </div>
-    </div>
+    </div></TooltipProvider></MotionConfig>
   );
 }

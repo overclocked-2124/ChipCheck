@@ -3,30 +3,34 @@
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { api, useLoad } from "@/components/api";
+import { NumberField, Select } from "@/components/controls";
 import { ErrorBox, Loading, Notice, PageHeading, Section, StateBadge } from "@/components/ui";
 import { controlInputs, type ControlInput } from "@/lib/manual";
+import { numberProblem } from "@/lib/number";
 import { formatValue } from "@/lib/results";
 import type { CampaignContract, CampaignView, CandidateResult, Conditions, EpisodeDetail, JsonValue, UiError } from "@/lib/types";
 
 type Tried = { conditions: Conditions; result: CandidateResult };
 
-/** Typed text stays as typed ("3." while typing 3.25); only a complete number is sent as a number. */
-function NumberText({ value, onChange }: { value: JsonValue; onChange: (v: JsonValue) => void }) {
+/** A typed number with steppers and a slider. Text stays as typed ("3." while typing 3.25); only a complete number is sent as a number. */
+function NumberControl({ c, value, onChange }: { c: Extract<ControlInput, { kind: "number" }>; value: JsonValue; onChange: (v: JsonValue) => void }) {
   const [text, setText] = useState(String(value));
   useEffect(() => { if (Number(text) !== value) setText(String(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
-  return <input type="text" inputMode="decimal" value={text}
-    onChange={e => { const t = e.target.value; setText(t); onChange(/^-?\d+(\.\d+)?$/.test(t.trim()) ? Number(t) : t); }} />;
+  const set = (t: string) => { setText(t); onChange(/^-?\d+(\.\d+)?$/.test(t.trim()) ? Number(t) : t); };
+  return (
+    <div className="control-card">
+      <NumberField label={c.name} value={text} onChange={set} step={c.step} unit={c.unit} rule={{ min: c.min, max: c.max }}
+        hint={`${formatValue(c.min)} to ${formatValue(c.max)} ${c.unit}, step ${formatValue(c.step)}${c.activeWhen ? `; only when ${c.activeWhen}` : ""}`} />
+      <input type="range" min={c.min} max={c.max} step={c.step} value={Number.isFinite(Number(value)) ? Number(value) : c.nominal}
+        onChange={e => set(e.target.value)} aria-label={`${c.name} slider`} />
+    </div>
+  );
 }
 
 function ControlField({ c, value, onChange }: { c: ControlInput; value: JsonValue; onChange: (v: JsonValue) => void }) {
-  if (c.kind === "boolean") return <label className="check"><input type="checkbox" checked={value === true} onChange={e => onChange(e.target.checked)} />{c.name}</label>;
-  if (c.kind === "choice") return <label>{c.name}<select value={String(value)} onChange={e => onChange(e.target.value)}>{c.values.map(v => <option key={v}>{v}</option>)}</select></label>;
-  return (
-    <label>{c.name} <span className="hint">({formatValue(c.min)}–{formatValue(c.max)} {c.unit}, step {formatValue(c.step)}{c.activeWhen ? `; only when ${c.activeWhen}` : ""})</span>
-      <input type="range" min={c.min} max={c.max} step={c.step} value={Number(value)} onChange={e => onChange(Number(e.target.value))} aria-label={`${c.name} slider`} />
-      <NumberText value={value} onChange={onChange} />
-    </label>
-  );
+  if (c.kind === "boolean") return <label className="check control-card"><input type="checkbox" checked={value === true} onChange={e => onChange(e.target.checked)} />{c.name}</label>;
+  if (c.kind === "choice") return <div className="control-card"><Select label={c.name} value={String(value)} onChange={onChange} options={c.values} /></div>;
+  return <NumberControl c={c} value={value} onChange={onChange} />;
 }
 
 function Outcome({ episodeId }: { episodeId: string }) {
@@ -51,6 +55,7 @@ export default function ManualPage({ params }: { params: Promise<{ id: string }>
   useEffect(() => { if (inputs.length && !Object.keys(values).length) setValues(Object.fromEntries(inputs.map(c => [c.name, c.nominal]))); }, [inputs, values]);
   if (campaign.loading || info.loading) return <Loading what="the contract controls" />;
   const c = campaign.data;
+  const invalid = inputs.filter(ci => ci.kind === "number" && numberProblem(String(values[ci.name] ?? ci.nominal), { min: ci.min, max: ci.max })).map(ci => ci.name);
   async function submit() {
     setBusy(true); setError(null);
     const r = await api<CandidateResult>(`${base}/manual-candidates`, { method: "POST", body: { conditions: values, note: note.trim() } });
@@ -65,14 +70,14 @@ export default function ManualPage({ params }: { params: Promise<{ id: string }>
       {c && c.state !== "RUNNING" ? <Notice tone="warn">The campaign is {c.state}. Manual picks are accepted only while it is RUNNING.</Notice> : null}
       <Section title="Your conditions" index={1} tag="Checked by the safety rules">
         {(["number", "choice", "boolean"] as const).map(kind => (
-          <div key={kind} className="fields" style={{ marginBottom: 20 }}>
+          <div key={kind} className="control-grid">
             {inputs.filter(ci => ci.kind === kind).map(ci => <ControlField key={ci.name} c={ci} value={values[ci.name] ?? ci.nominal} onChange={v => setValues(s => ({ ...s, [ci.name]: v }))} />)}
           </div>
         ))}
-        <label style={{ marginTop: 18 }}>Note (optional)<input value={note} onChange={e => setNote(e.target.value)} placeholder="who picked it, and why" /></label>
+        <label style={{ marginTop: 4 }}>Note (optional)<input value={note} onChange={e => setNote(e.target.value)} placeholder="who picked it, and why" /></label>
         <ErrorBox error={error} title="Pick not submitted" />
         <div className="card-actions">
-          <span className="action-note">A manual pick counts against the discovery budget and is labelled MANUAL in the report.</span>
+          <span className="action-note">{invalid.length ? <span className="bad-text">Out of range: {invalid.join(", ")}. The safety rules would refuse it.</span> : "A manual pick counts against the discovery budget and is labelled MANUAL in the report."}</span>
           <button type="button" className="secondary" onClick={() => setValues(Object.fromEntries(inputs.map(ci => [ci.name, ci.nominal])))}>Reset to nominal</button>
           <button type="button" disabled={busy || c?.state !== "RUNNING"} onClick={() => void submit()}>{busy ? "Checking…" : "Check and run"} <span className="arrow" aria-hidden="true">→</span></button>
         </div>

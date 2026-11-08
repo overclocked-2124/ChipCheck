@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { api, useNow } from "@/components/api";
+import { Select } from "@/components/controls";
 import { Empty, ErrorBox, KeyValues, Notice, PassphraseModal, Section, type PassphraseRequest } from "@/components/ui";
 import { ageSeconds, formatAge, type ActiveEpisode } from "@/lib/live";
 import { countBy, type Tracks } from "@/lib/region";
@@ -54,12 +55,10 @@ export function ReconcileLease({ lease, onDone }: { lease: LeaseView; onDone: ()
       <strong>The bench stopped reporting during an episode (lease {lease.id.slice(0, 12)} needs reconciliation).</strong>
       <p>Nothing else runs on this fixture until a reviewer records what happened. Check the fixture first.</p>
       <div className="fields" style={{ marginTop: 10 }}>
-        <label>What happened
-          <select value={resolution} onChange={e => setResolution(e.target.value)}>
-            <option value="not_executed">The episode did not run (no power was applied)</option>
-            <option value="evidence_lost">It may have run, but its evidence is lost</option>
-          </select>
-        </label>
+        <Select label="What happened" value={resolution} onChange={setResolution} options={[
+          { value: "not_executed", label: "The episode did not run (no power was applied)" },
+          { value: "evidence_lost", label: "It may have run, but its evidence is lost" },
+        ]} />
         <label>Note<input value={note} onChange={e => setNote(e.target.value)} placeholder="what you checked at the bench" /></label>
       </div>
       <div className="row" style={{ marginTop: 12 }}><button type="button" disabled={!note.trim()} onClick={open}>Reconcile (reviewer)</button></div>

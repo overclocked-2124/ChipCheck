@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import * as Dialog from "@radix-ui/react-dialog";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { actionSpec, stateTone, STATE_MEANING, type CampaignAction } from "@/lib/actions";
 import { api } from "@/components/api";
+import { Tip } from "@/components/controls";
 import type { ApiResult, CampaignState, UiError } from "@/lib/types";
 
 export function StateBadge({ state }: { state: CampaignState | string }) {
   const tone = stateTone(state as CampaignState);
   const title = STATE_MEANING[state as CampaignState] ?? "";
-  return <span className={`badge badge-${tone}`} title={title}>{state}</span>;
+  return <Tip content={title}><span className={`badge badge-${tone}`} tabIndex={title ? 0 : undefined}>{state}</span></Tip>;
 }
 
 export function ErrorBox({ error, title }: { error: UiError | null; title?: string }) {
@@ -159,27 +160,28 @@ export function PassphraseModal({ request, onClose }: { request: PassphraseReque
     else if (result.error.code === "PERMISSION_DENIED") setError(result.error);
     else { request.onDone(result); onClose(); }
   }
-  // Rendered on <body>: an animated ancestor (transform) would otherwise trap position: fixed inside its card.
-  const [host, setHost] = useState<HTMLElement | null>(null);
-  useEffect(() => setHost(document.body), []);
-  if (!host) return null;
-  return createPortal(
-    <div className="modal-backdrop" onKeyDown={e => { if (e.key === "Escape") onClose(); }}>
-      <form className="modal" role="dialog" aria-modal="true" aria-labelledby="pp-title" onSubmit={submit}>
-        <h2 id="pp-title">{request.title}</h2>
-        <p>{request.description}</p>
-        <label>Reviewer passphrase
-          <input ref={input} type="password" autoComplete="off" autoFocus required />
-        </label>
-        <p className="hint">The passphrase is sent with this one request and is not stored.</p>
-        <ErrorBox error={error} title="Passphrase not accepted" />
-        <div className="row">
-          <button type="submit" disabled={busy}>{busy ? "Working..." : request.confirmLabel}</button>
-          <button type="button" className="secondary" onClick={onClose} disabled={busy}>Cancel</button>
-        </div>
-      </form>
-    </div>,
-    host,
+  // Radix Dialog: rendered on <body> (an animated ancestor would trap position: fixed), focus is trapped, Escape closes.
+  return (
+    <Dialog.Root open onOpenChange={open => { if (!open && !busy) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="modal-backdrop" />
+        <Dialog.Content className="modal" aria-describedby="pp-desc">
+          <form onSubmit={submit} className="modal-form">
+            <Dialog.Title asChild><h2>{request.title}</h2></Dialog.Title>
+            <Dialog.Description asChild><p id="pp-desc">{request.description}</p></Dialog.Description>
+            <label>Reviewer passphrase
+              <input ref={input} type="password" autoComplete="off" autoFocus required />
+            </label>
+            <p className="hint">The passphrase is sent with this one request and is not stored.</p>
+            <ErrorBox error={error} title="Passphrase not accepted" />
+            <div className="modal-actions">
+              <Dialog.Close asChild><button type="button" className="secondary" disabled={busy}>Cancel</button></Dialog.Close>
+              <button type="submit" disabled={busy}>{busy ? "Working…" : request.confirmLabel}</button>
+            </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -209,5 +211,5 @@ export function ActionButton({ action, campaignId, version, onResult, disabled, 
       </span>
     );
   }
-  return <button type="button" disabled={busy || disabled} onClick={() => void run()}>{busy ? "Working..." : spec.label}</button>;
+  return <button type="button" disabled={busy || disabled} onClick={() => void run()}>{busy ? "Working…" : spec.label}</button>;
 }

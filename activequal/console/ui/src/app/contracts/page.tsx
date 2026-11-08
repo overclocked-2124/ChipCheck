@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { api, recentAdd, recentGet, useLoad } from "@/components/api";
+import { NumberField } from "@/components/controls";
 import { Empty, ErrorBox, KeyValues, Loading, Mono, Notice, PageHeading, Section } from "@/components/ui";
 import { applyForm, EMPTY_FORM, parseContractText, prettyJson, readForm, type ContractForm } from "@/lib/contractForm";
 import { OLED_TEMPLATE } from "@/lib/contractTemplate";
@@ -107,7 +108,7 @@ export default function ContractsPage() {
       <Section title="Open a contract version" id="open" index={3} tag="By id">
         <form className="row openform" onSubmit={e => { e.preventDefault(); if (openId.trim()) router.push(`/contracts/${encodeURIComponent(openId.trim())}/${Number(openVersion) || 1}`); }}>
           <label style={{ flex: 1 }}>Contract id<input value={openId} onChange={e => setOpenId(e.target.value)} required /></label>
-          <label>Version<input type="number" min={1} value={openVersion} onChange={e => setOpenVersion(e.target.value)} style={{ width: "6rem" }} /></label>
+          <div style={{ width: "9.5rem" }}><NumberField label="Version" value={openVersion} onChange={setOpenVersion} rule={{ integer: true, min: 1 }} /></div>
           <button type="submit">Open <span className="arrow" aria-hidden="true">→</span></button>
         </form>
         {recents.length ? <p className="hint">Recently used on this browser: {recents.map(r => { const [id, v] = r.split("@"); return <span key={r}><Link href={`/contracts/${id}/${v}`}>{r.slice(0, 20)}</Link>{" "}</span>; })}</p> : null}

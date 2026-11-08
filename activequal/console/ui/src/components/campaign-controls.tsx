@@ -41,18 +41,24 @@ export function ArmChecklist({ campaign, fixture, info, serverReasons, onResult 
   const [wiring, setWiring] = useState(false);
   const contract = info ? { approved: info.approvals.length >= info.approvalsRequired, approvedBy: info.approvals.map(a => a.reviewer), approvalsRequired: info.approvalsRequired } : null;
   const list = buildChecklist({ campaign, contract, fixture, serverReasons, now, wiringConfirmed: wiring });
+  // What blocks Arm comes first, so it is visible without scrolling past the passing conditions.
+  const RANK = { fail: 0, unknown: 1, pass: 2 } as const;
+  const ordered = [...list.conditions].sort((a, b) => RANK[a.status] - RANK[b.status]);
+  const blocking = list.conditions.filter(c => c.status !== "pass").length + list.other.length;
+  const tag = list.armable ? "Ready to arm" : `${blocking} blocking`;
   return (
-    <Section title="Arming checklist" index={2} tag={list.armable ? "Ready to arm" : "Arm blocked"}>
+    <Section title="Arming checklist" index={1} tag={tag}>
       <ArmIdentity info={info} fixture={fixture} />
-      <ul className="checklist" style={{ marginTop: 18 }}>{list.conditions.map(c => (
+      <ul className="checklist" style={{ marginTop: 18 }}>
+      {list.other.map((r, i) => (
+        <li key={`o${i}`} className="fail"><span className="mark" aria-hidden="true">✕</span>
+          <div><strong><span className="sr-only">Not OK: </span><code>{r.code}</code></strong><small>{r.message}</small></div></li>
+      ))}
+      {ordered.map(c => (
         <li key={c.id} className={c.status}>
           <span className="mark" aria-hidden="true">{MARK[c.status]}</span>
           <div><strong><span className="sr-only">{SAY[c.status]}: </span>{c.label}</strong>{c.messages.length ? <small>{c.messages.join("; ")}</small> : null}</div>
         </li>
-      ))}
-      {list.other.map((r, i) => (
-        <li key={`o${i}`} className="fail"><span className="mark" aria-hidden="true">✕</span>
-          <div><strong><span className="sr-only">Not OK: </span><code>{r.code}</code></strong><small>{r.message}</small></div></li>
       ))}</ul>
       <div className="card-actions">
         <label className="check action-note"><input type="checkbox" checked={wiring} onChange={e => setWiring(e.target.checked)} />
@@ -80,7 +86,7 @@ export function ClearLockout({ campaign, onDone }: { campaign: CampaignView; onD
     });
   }
   return (
-    <Section title="Clear the lockout" index={2} tag="Reviewer">
+    <Section title="Clear the lockout" index={1} tag="Reviewer">
       <div className="stack">
         <label className="check"><input type="checkbox" checked={inspected} onChange={e => setInspected(e.target.checked)} />
           I inspected the fixture in person and reset the interlock by hand</label>

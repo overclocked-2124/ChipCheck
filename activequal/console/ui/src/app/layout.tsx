@@ -5,6 +5,7 @@ import "@fontsource-variable/space-grotesk";
 import "@fontsource-variable/geist-mono";
 import { Shell } from "@/components/shell";
 import "./styles.css";
+import "./controls.css";
 
 export const metadata: Metadata = {
   title: "ChipCheck Console",

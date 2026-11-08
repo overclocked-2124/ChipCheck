@@ -56,7 +56,8 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       if (stale) { void campaign.reload(); void events.reload(); }
     }
   }
-  let n = c.state === "READY" || c.state === "LOCKED_OUT" ? 2 : 1;   // the checklist or lockout card is section 02
+  const gate = c.state === "READY" || c.state === "LOCKED_OUT";     // the checklist or lockout card leads as section 01
+  let n = gate ? 2 : 1;
   const next = () => ++n;
 
   return (
@@ -76,7 +77,10 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         </Notice>
       ) : null}
       {stop && !lock ? <Notice tone={c.state === "COMPLETED" ? "ok" : c.state === "LOCKED_OUT" ? "bad" : "info"}><strong>{stop.headline}.</strong> <code>{stop.reasonCode}</code> {stop.reason} ({stop.actor})</Notice> : null}
-      <Section title="Actions" index={1} tag="Operator">
+      {c.state === "READY" ? <ArmChecklist campaign={c} fixture={fixture.data} info={info.data} serverReasons={serverReasons} onResult={done} /> : null}
+      {c.state === "LOCKED_OUT" ? <ClearLockout campaign={c} onDone={r => done("clear-lockout", r)} /> : null}
+      <div className="grid2">
+      <Section title="Actions" index={n} tag="Operator">
         <div className="row">
           {allowedActions(c.state).filter(a => !a.reviewer && !a.checklistOnly).map(a =>
             <ActionButton key={a.action} action={a.action} campaignId={c.id} version={c.version} onResult={done} />)}
@@ -86,8 +90,6 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         <ErrorBox error={actionError} title="Action refused" />
         {reasons.length ? <Notice tone="warn"><ul>{reasons.map((r, i) => <li key={i}><code>{r.code}</code> {r.message}</li>)}</ul></Notice> : null}
       </Section>
-      {c.state === "READY" ? <ArmChecklist campaign={c} fixture={fixture.data} info={info.data} serverReasons={serverReasons} onResult={done} /> : null}
-      {c.state === "LOCKED_OUT" ? <ClearLockout campaign={c} onDone={r => done("clear-lockout", r)} /> : null}
       <Section title="Progress" index={next()} tag="Budget">
         <div className="stats">
           <Stat label="Discovery" value={c.budget.discoveryUsed} of={c.budget.discovery} />
@@ -97,6 +99,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         </div>
         <KeyValues rows={[["Outcomes", Object.entries(c.episodesByOutcome).map(([k, v]) => `${k} ${v}`).join(", ") || "none yet"]]} />
       </Section>
+      </div>
       <div className="grid2">
         <CurrentEpisode index={next()} current={activeEpisode(log)} lease={live} maxEpisodeS={info.data?.maxEpisodeS ?? null} />
         <Section title="Bench" index={next()} tag={c.fixtureId}>
@@ -110,7 +113,9 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           </div>
         </Section>
       </div>
-      <LatestOutcome index={next()} records={eps} tracks={tracks} />
+      <div className="grid2">
+        <LatestOutcome index={next()} records={eps} tracks={tracks} />
+        </div>
       <Section title="Outcome timeline" index={next()} tag={`${eps.length} episodes`}>
         <div className="stack">
           <OutcomeStrip records={eps} />
@@ -118,7 +123,6 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           <Legend />
         </div>
       </Section>
-      <Reasons index={next()} records={eps} rejected={rejected} />
       <Section title="Event log" index={next()} tag={`${log.length} events`}>
         <div className="table-wrap timeline"><table className="grid"><tbody>
           {[...log].reverse().slice(0, 60).map(e => (

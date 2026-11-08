@@ -62,3 +62,16 @@ test("contract rules read as text and versions diff by path", () => {
   ]);
   assert.deepEqual(jsonDiff({ a: 1 }, { a: 1 }), []);
 });
+
+test("number fields: rules replace type=number checks, and steppers keep the step's precision", async () => {
+  const { numberProblem, stepNumber } = await import("../src/lib/number.ts");
+  assert.equal(numberProblem("abc", { integer: true }), "Whole number only");
+  assert.equal(numberProblem("1.5", { integer: true }), "Whole number only");
+  assert.equal(numberProblem("0", { integer: true, min: 1 }), "At least 1");
+  assert.equal(numberProblem("", { integer: true }), "Required");
+  assert.equal(numberProblem("3.25", { min: 3, max: 3.6 }), null);
+  assert.equal(stepNumber("3.3", 1, 0.01, { min: 3, max: 3.6 }), "3.31");
+  assert.equal(stepNumber("3.6", 1, 0.01, { min: 3, max: 3.6 }), "3.60");
+  assert.equal(stepNumber("1", -1, 1, { min: 1 }), "1");
+  assert.equal(stepNumber("0.1", 1, 0.1), "0.2");
+});

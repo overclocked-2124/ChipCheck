@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { Select } from "@/components/controls";
 import { formatValue } from "@/lib/results";
 import { buildSeries, OUTCOME_STYLE, scale, UNKNOWN_OUTCOME_STYLE, type SeriesPoint } from "@/lib/series";
 import { outcomeStrip } from "@/lib/region";
@@ -50,15 +51,9 @@ export function RegionChart({ history, measuredControls }: { history: HistoryEpi
   return (
     <div className="stack">
       <div className="row">
-        <label className="inline">Control
-          <select value={series.control} onChange={e => setControl(e.target.value)}>{series.numericControls.map(c => <option key={c}>{c}</option>)}</select>
-        </label>
-        <label className="inline">Discrete state
-          <select value={filter} onChange={e => setFilter(e.target.value)}>
-            <option value="all">All combinations ({series.points.length})</option>
-            {keys.map(k => <option key={k} value={k}>{k}</option>)}
-          </select>
-        </label>
+        <Select compact label="Control" value={series.control} onChange={setControl} options={series.numericControls} />
+        <Select compact label="Discrete state" value={filter} onChange={setFilter}
+          options={[{ value: "all", label: `All combinations (${series.points.length})` }, ...keys.map(k => ({ value: k, label: k }))]} />
       </div>
       <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Robustness against ${series.control}`}>
         {[series.yRange[0], 0, series.yRange[1]].map(v => (
