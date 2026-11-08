@@ -45,9 +45,20 @@ uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e ".[de
 .venv/bin/python -m unittest discover -s activequal -t .          # full suite
 .venv/bin/python -m activequal.tools.benchmark --campaigns 20      # planner comparison on the simulator
 .venv/bin/python -m activequal.service.app --init                  # config, operator token, reviewer passphrase
-.venv/bin/python -m activequal.service.app                         # control plane on 127.0.0.1
-.venv/bin/python -m activequal.controller.service.app --fixture-id bench-A --token-file <token> --mode sim
-cd activequal/console/ui && npm ci && npm run dev                  # Console
+.venv/bin/python -m activequal.service.app                         # control plane on 127.0.0.1:8001
+.venv/bin/python -m activequal.tools.demo_seed                     # approved OLED contract, bench-A, calibration
+.venv/bin/python -m activequal.controller.service.app --fixture-id bench-A \
+    --token-file ~/.config/activequal/bench-A.token --mode sim --profile B1w
+cd activequal/console/ui && npm ci && \
+    ACTIVEQUAL_OPERATOR_TOKEN_FILE=~/.config/activequal/operator.token npm run dev   # Console
+```
+
+Bench tools (HLD 02 §18):
+
+```bash
+.venv/bin/python -m activequal.tools.hardware_check --emulator --energize        # self-test, no hardware
+.venv/bin/python -m activequal.tools.hardware_check --port /dev/ttyACM0          # real test controller
+.venv/bin/python -m activequal.tools.calibrate points.json --operator dana --post # rail calibration
 ```
 
 The optional `gp` planner needs `.[gp]` (torch, CPU is enough). Real serial benches use `--mode serial --port /dev/ttyACM0` with `.[serial]`; that path is tested only against the MCU emulator.

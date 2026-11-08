@@ -18,8 +18,9 @@ This document defines how ActiveQual is built and verified within the 12-week pr
 | Decision Service | Built: `tpe`, `gp`, `random`, `grid`, `fixed_corner`, `coverage`, `manual`; property tests |
 | Agent | Built: phase plan, replayable verification sessions (confirm, minimize, necessity, bracket) |
 | Controller, Adapter | Built: Controller with spool, simulated bench (profiles B1a/B1b/B1w/B2/B3), serial protocol, MCU emulator and serial host adapter (tested against the emulator only) |
-| Tools | Built: benchmark CLI, full-stack parity check, report and bundle export |
-| Console | Built: contracts, fixtures, campaign creation, live campaign page, results; not yet browser-verified end to end |
+| Tools | Built: benchmark CLI, full-stack parity check, report and bundle export, demo seeding, calibration fit, bench acceptance probes (HLD 02 §18 tests 1 and 7) |
+| Console | Built and browser-verified on the simulated stack (2026-11-08): contract editor and approval, fixtures and calibration, campaign creation, arm checklist, live campaign, results, export, comparison |
+| CI | GitHub Actions: Python suite, emulator bench self-test, Console typecheck, tests and build |
 | Test-controller and DUT firmware | Not started (human work) |
 | Hardware | Parts and reviewed limits open (HLD 02 §20); datasheet-based planning estimates in HLD 02 §19.2 |
 

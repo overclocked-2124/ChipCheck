@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { use } from "react";
-import { useLoad } from "@/components/api";
+import { use, useState } from "react";
+import { api, useLoad } from "@/components/api";
 import { ConditionsTable, Empty, ErrorBox, Loading, Notice, Section, StateBadge } from "@/components/ui";
 import { formatValue, reproductionText, resultStatement } from "@/lib/results";
 import { OUTCOME_STYLE, UNKNOWN_OUTCOME_STYLE } from "@/lib/series";
-import type { CampaignView, Counterexample, EpisodesResponse } from "@/lib/types";
+import type { CampaignView, Counterexample, EpisodesResponse, UiError } from "@/lib/types";
+
+type Exported = { bundlePath: string; markdown: string };
 
 const TONE = { counterexample: "bad", none: "ok", inconclusive: "warn", safety: "bad", running: "info" } as const;
 
@@ -16,6 +18,15 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
   const campaign = useLoad<CampaignView>(base, 5000);
   const eps = useLoad<EpisodesResponse>(`${base}/episodes`, 5000);
   const cxs = useLoad<{ counterexamples: Counterexample[] }>(`${base}/counterexamples`, 5000);
+  const [exported, setExported] = useState<Exported | null>(null);
+  const [exportError, setExportError] = useState<UiError | null>(null);
+  const [exporting, setExporting] = useState(false);
+  async function exportReport() {
+    setExporting(true); setExportError(null);
+    const r = await api<Exported>(`${base}/export`);
+    setExporting(false);
+    if (r.ok) setExported(r.data); else setExportError(r.error);
+  }
   const c = campaign.data;
   if (campaign.loading) return <Loading what="results" />;
   if (!c) return <ErrorBox error={campaign.error} title="Could not load the campaign" />;
@@ -58,6 +69,16 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
             );
           })}</tbody>
         </table></div>
+      </Section>
+      <Section title="Report and evidence bundle">
+        <button type="button" onClick={() => void exportReport()} disabled={exporting}>{exporting ? "Exporting..." : "Export report and evidence bundle"}</button>
+        <ErrorBox error={exportError} title="Export failed" />
+        {exported ? (
+          <>
+            <p className="hint">Bundle written on the control-plane machine: <code>{exported.bundlePath}</code></p>
+            <pre className="report">{exported.markdown}</pre>
+          </>
+        ) : null}
       </Section>
       {(eps.data?.rejected.length ?? 0) > 0 ? (
         <Section title={`Rejected candidates (${eps.data!.rejected.length})`}>
