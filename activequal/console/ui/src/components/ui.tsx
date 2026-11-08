@@ -1,14 +1,16 @@
 "use client";
 
+import * as Dialog from "@radix-ui/react-dialog";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { actionSpec, stateTone, STATE_MEANING, type CampaignAction } from "@/lib/actions";
 import { api } from "@/components/api";
+import { Tip } from "@/components/controls";
 import type { ApiResult, CampaignState, UiError } from "@/lib/types";
 
 export function StateBadge({ state }: { state: CampaignState | string }) {
   const tone = stateTone(state as CampaignState);
   const title = STATE_MEANING[state as CampaignState] ?? "";
-  return <span className={`badge badge-${tone}`} title={title}>{state}</span>;
+  return <Tip content={title}><span className={`badge badge-${tone}`} tabIndex={title ? 0 : undefined}>{state}</span></Tip>;
 }
 
 export function ErrorBox({ error, title }: { error: UiError | null; title?: string }) {
@@ -28,12 +30,62 @@ export function Notice({ tone = "info", children }: { tone?: "info" | "warn" | "
   return <div className={`alert alert-${tone}`} role={tone === "bad" ? "alert" : "status"}>{children}</div>;
 }
 
-export function Section({ title, children, id, aside }: { title: string; children: ReactNode; id?: string; aside?: ReactNode }) {
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** Eyebrow, display title and intro; optional actions on the right and a progress bar underneath. */
+export function PageHeading({ eyebrow, step, title, intro, actions, progress }: {
+  eyebrow: string; step?: string; title: ReactNode; intro?: ReactNode; actions?: ReactNode; progress?: number | null;
+}) {
   return (
-    <section className="card" aria-labelledby={id ? id + "-h" : undefined}>
-      <div className="card-head"><h2 id={id ? id + "-h" : undefined}>{title}</h2>{aside}</div>
+    <div className="page-heading-wrap">
+      <div className="page-heading">
+        <div className="page-heading-text">
+          <div className="eyebrow">{eyebrow}{step ? <span> / {step}</span> : null}</div>
+          <h1>{title}</h1>
+          {intro ? <p className="intro">{intro}</p> : null}
+        </div>
+        {actions ? <div className="page-actions">{actions}</div> : null}
+      </div>
+      {progress !== undefined && progress !== null ? <ProgressBar value={progress} label="Progress" /> : null}
+    </div>
+  );
+}
+
+/** Card with a numbered badge, a display heading and a small upper-case tag (or custom content) on the right. */
+export function Section({ title, children, id, aside, index, tag }: {
+  title: string; children: ReactNode; id?: string; aside?: ReactNode; index?: number; tag?: string;
+}) {
+  return (
+    <section className="card" id={id} aria-labelledby={id ? id + "-h" : undefined}>
+      <div className="card-heading">
+        <div>{index !== undefined ? <span className="section-index" aria-hidden="true">{pad(index)}</span> : null}<h2 id={id ? id + "-h" : undefined}>{title}</h2></div>
+        {aside ?? (tag ? <span className="card-tag">{tag}</span> : null)}
+      </div>
       {children}
     </section>
+  );
+}
+
+/** Thin progress bar; `value` is a fraction from 0 to 1. */
+export function ProgressBar({ value, label, thin }: { value: number; label: string; thin?: boolean }) {
+  const pct = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0)) * 100;
+  return (
+    <div className={`progress${thin ? " thin" : ""}`} role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
+      <span style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+/** A labelled number tile, optionally with a progress bar (used for budgets). */
+export function Stat({ label, value, sub, of, small }: { label: string; value: ReactNode; sub?: ReactNode; of?: number; small?: boolean }) {
+  const n = typeof value === "number" ? value : NaN;
+  return (
+    <div className="stat">
+      <span>{label}</span>
+      <strong className={small ? "small" : undefined}>{value}{of !== undefined ? <small style={{ display: "inline", fontSize: 13 }}> / {of}</small> : null}</strong>
+      {sub ? <small>{sub}</small> : null}
+      {of !== undefined && of > 0 && Number.isFinite(n) ? <ProgressBar value={n / of} label={label} thin /> : null}
+    </div>
   );
 }
 
@@ -42,7 +94,7 @@ export function Empty({ children }: { children: ReactNode }) {
 }
 
 export function Loading({ what }: { what: string }) {
-  return <p className="loading" role="status">Loading {what}...</p>;
+  return <div className="skeleton" role="status"><p>Loading {what}…</p><div /><div /><div /></div>;
 }
 
 export function KeyValues({ rows }: { rows: [string, ReactNode][] }) {
@@ -71,9 +123,9 @@ export function ConditionsTable({ conditions }: { conditions: Record<string, unk
   const entries = Object.entries(conditions);
   if (!entries.length) return <Empty>No conditions.</Empty>;
   return (
-    <table className="grid"><tbody>
-      {entries.map(([k, v]) => <tr key={k}><th scope="row">{k}</th><td>{typeof v === "string" ? v : JSON.stringify(v)}</td></tr>)}
-    </tbody></table>
+    <div className="table-wrap"><table className="grid"><tbody>
+      {entries.map(([k, v]) => <tr key={k}><th scope="row">{k}</th><td className="num">{typeof v === "string" ? v : JSON.stringify(v)}</td></tr>)}
+    </tbody></table></div>
   );
 }
 
@@ -108,22 +160,28 @@ export function PassphraseModal({ request, onClose }: { request: PassphraseReque
     else if (result.error.code === "PERMISSION_DENIED") setError(result.error);
     else { request.onDone(result); onClose(); }
   }
+  // Radix Dialog: rendered on <body> (an animated ancestor would trap position: fixed), focus is trapped, Escape closes.
   return (
-    <div className="modal-backdrop" onKeyDown={e => { if (e.key === "Escape") onClose(); }}>
-      <form className="modal" role="dialog" aria-modal="true" aria-labelledby="pp-title" onSubmit={submit}>
-        <h2 id="pp-title">{request.title}</h2>
-        <p>{request.description}</p>
-        <label>Reviewer passphrase
-          <input ref={input} type="password" autoComplete="off" autoFocus required />
-        </label>
-        <p className="hint">The passphrase is sent with this one request and is not stored.</p>
-        <ErrorBox error={error} title="Passphrase not accepted" />
-        <div className="row">
-          <button type="submit" disabled={busy}>{busy ? "Working..." : request.confirmLabel}</button>
-          <button type="button" className="secondary" onClick={onClose} disabled={busy}>Cancel</button>
-        </div>
-      </form>
-    </div>
+    <Dialog.Root open onOpenChange={open => { if (!open && !busy) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="modal-backdrop" />
+        <Dialog.Content className="modal" aria-describedby="pp-desc">
+          <form onSubmit={submit} className="modal-form">
+            <Dialog.Title asChild><h2>{request.title}</h2></Dialog.Title>
+            <Dialog.Description asChild><p id="pp-desc">{request.description}</p></Dialog.Description>
+            <label>Reviewer passphrase
+              <input ref={input} type="password" autoComplete="off" autoFocus required />
+            </label>
+            <p className="hint">The passphrase is sent with this one request and is not stored.</p>
+            <ErrorBox error={error} title="Passphrase not accepted" />
+            <div className="modal-actions">
+              <Dialog.Close asChild><button type="button" className="secondary" disabled={busy}>Cancel</button></Dialog.Close>
+              <button type="submit" disabled={busy}>{busy ? "Working…" : request.confirmLabel}</button>
+            </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -153,5 +211,5 @@ export function ActionButton({ action, campaignId, version, onResult, disabled, 
       </span>
     );
   }
-  return <button type="button" disabled={busy || disabled} onClick={() => void run()}>{busy ? "Working..." : spec.label}</button>;
+  return <button type="button" disabled={busy || disabled} onClick={() => void run()}>{busy ? "Working…" : spec.label}</button>;
 }

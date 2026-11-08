@@ -665,15 +665,18 @@ class Backend:
 
     # --------------------------------------------------------------- candidates
 
-    def submit_candidate(self, campaign_id: str, planner_sequence: int, conditions: Any, *, planner_reason: str,
+    def submit_candidate(self, campaign_id: str, planner_sequence: int | None, conditions: Any, *, planner_reason: str,
                          reason_code: str, role: str = ROLE_DISCOVERY, linked_episode_id: str | None = None,
                          repeat_reason: str | None = None, actor: Actor = SYSTEM_ACTOR) -> dict[str, Any]:
         """Validate a candidate and, if the safety rules approve it, create an AVAILABLE episode.
 
         Idempotent on (campaign, planner_sequence): a repeat with the same body returns the first
-        answer, a repeat with a different body is an ``IDEMPOTENCY_MISMATCH`` (HLD 03 §16).
+        answer, a repeat with a different body is an ``IDEMPOTENCY_MISMATCH`` (HLD 03 §16). ``None`` takes the
+        next free sequence inside the same transaction, so two submitters (the Agent and a person adding a manual
+        candidate) can never pick the same number.
         """
-        if not isinstance(planner_sequence, int) or isinstance(planner_sequence, bool) or planner_sequence < 0:
+        if planner_sequence is not None and (not isinstance(planner_sequence, int) or isinstance(planner_sequence, bool)
+                                             or planner_sequence < 0):
             raise invalid("planner_sequence must be a non-negative integer")
         if role not in EPISODE_ROLES:
             raise invalid(f"role must be one of {', '.join(sorted(EPISODE_ROLES))}")
@@ -688,6 +691,10 @@ class Backend:
             raise invalid(f"candidate is not valid JSON: {exc}") from exc
         with self.db.transaction() as conn:
             campaign = self._campaign(conn, campaign_id)
+            if planner_sequence is None:
+                top = conn.execute("SELECT MAX(planner_sequence) AS m FROM candidates WHERE campaign_id = ?",
+                                   (campaign_id,)).fetchone()["m"]
+                planner_sequence = 0 if top is None else top + 1
             existing = conn.execute("SELECT * FROM candidates WHERE campaign_id = ? AND planner_sequence = ?",
                                     (campaign_id, planner_sequence)).fetchone()
             if existing is not None:

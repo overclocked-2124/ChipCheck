@@ -107,3 +107,75 @@ export type UiError = {
   currentVersion?: number;
 };
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: UiError };
+
+// ---- Console read views (activequal/service/views.py) ----
+
+export type LeaseView = {
+  id: string; episodeId: string; owner: string; attempt: number; issuedAt: string; expiresAt: string;
+  lastHeartbeatAt: string; state: "ACTIVE" | "RELEASED" | "NEEDS_RECONCILIATION";
+};
+
+export type EpisodeRecord = {
+  episodeId: string; attempt: number; role: EpisodeRole; pool: "discovery" | "verification"; state: string;
+  outcome: Outcome | null; linkedEpisodeId: string | null; plannerSequence: number; discoveryIndex: number | null;
+  requested: Conditions; measured: Record<string, Measured>;
+  verdict: Omit<VerdictView, "episodeId" | "state"> | null;
+  planner: { method: string; reason: string; reasonCode: string; repeatReason: string | null };
+  quality: Record<string, JsonValue> | null; createdAt: string; finalizedAt: string | null;
+};
+export type RejectedRecord = {
+  candidateId: string; plannerSequence: number; role: string; conditions: Conditions;
+  violations: { code: string; control?: string | null; message: string }[]; plannerReason: string; reasonCode: string;
+};
+export type RecordsResponse = { episodes: EpisodeRecord[]; rejected: RejectedRecord[] };
+
+export type EpisodeDetail = EpisodeView & {
+  planner: EpisodeRecord["planner"] | null; plannerSequence: number | null; discoveryIndex: number | null;
+  quality: Record<string, JsonValue> | null; benchEvents: { type?: string; [k: string]: JsonValue | undefined }[];
+  safetyTrip: string | null; manifestHash: string | null;
+  traces: { sha256: string; mediaType: string; bytes: number }[]; leases: LeaseView[];
+  createdAt: string | null; finalizedAt: string | null;
+};
+
+export type CampaignContract = {
+  contractId: string; version: number; contractHash: string; contract: Record<string, JsonValue>;
+  approvals: { reviewer: string; approvedAt: string }[]; approvalsRequired: number;
+  armed: Record<string, JsonValue>; calibration: Record<string, JsonValue> | null;
+  maxEpisodeS: number | null; expectedMaxRuntimeS: number | null;
+};
+
+export type Proportion = { numerator: number; denominator: number; rate: number | null; wilson95: [number, number] | null };
+export type ReportCounterexample = {
+  id: string; originalEpisodeId: string; origin: "seeded" | "natural" | "unknown"; originLabel: string;
+  violated: { requirement: string; metric: string | null; margin: number | null; measuredValue: number | null; uncertainty: number | null; unit: string | null }[];
+  original: { requested: Conditions; measured: Record<string, Measured>; discoveryIndex: number | null; plannerReason: string };
+  minimized: Counterexample["minimized"];
+  intervals: Record<string, Interval>; budgetExhausted: boolean;
+  reproduction: Proportion & { unusableReplays: number; meetsTenReplays: boolean; note: string };
+  verification: { episodes: { sequence: number; role: string; episodeId: string | null; outcome: string | null; conditions: Conditions }[] };
+  nearbyPassing: { episodeId: string; role: string; conditions: Conditions }[];
+};
+export type ReportView = {
+  campaignId: string; state: string; partial: boolean;
+  identity: { contractId: string; contractVersion: number; contractHash: string; fixtureId: string; planner: { method: string; seed: number }; dut?: string | null };
+  budget: { discovery: { allowed: number; used: number; remaining: number }; verification: { allowed: number; used: number; remaining: number } };
+  outcomes: { total: number; valid: number; counts: Record<string, number>; invalidByReason: Record<string, number>;
+    candidatesRejected: { count: number; byCode: Record<string, number> } };
+  stop: { state: string; reasonCode: string; reason: string; backendTs: string; actorId: string } | null;
+  metrics: { episodesToFirstConfirmedFailure: number | null; firstObservedFailureIndex: number | null; censoredAtBudget: number | null };
+  requirements: { id: string; metric: string | null; op?: string; limit: Record<string, number>; evaluated: number; pass: number; fail: number;
+    inconclusive: number; minMargin: number | null; minMarginEpisodeId: string | null }[];
+  result: { kind: string; headline: string; statements: { text: string; episodeIds: string[] }[] };
+  counterexamples: ReportCounterexample[];
+  limitations: string[];
+};
+
+export type KaplanMeier = { n: number; events: number; censored: number; median: number | null; steps: { time: number; survival: number; atRisk: number; events: number; censored: number }[] };
+export type CompareResponse = {
+  campaigns: { campaignId: string; planner: string; seed: number; state: string; contract: string;
+    firstConfirmedFailureAt: number | null; firstObservedFailureAt: number | null; censoredAt: number | null;
+    discoveryUsed: number; discoveryBudget: number; verificationUsed: number; stoppedEarly: boolean; resultKind: string }[];
+  comparison: { primaryMetric: string; checkpoints: number[];
+    profiles: Record<string, { planners: Record<string, { campaigns: number; kaplanMeier: KaplanMeier;
+      discoveryRates: Record<string, Proportion> }>; logRank: { a: string; b: string; chiSquare: number; p: number; pBonferroni: number }[] }> };
+};

@@ -120,9 +120,8 @@ class Agent:
         if not tests:
             return self._complete("no feasible candidate remains for the planner")
         test = tests[0]
-        sequence = self.backend.next_planner_sequence(self.campaign_id)
         result = self.backend.submit_candidate(
-            self.campaign_id, sequence, test["conditions"], planner_reason=test["reason"],
+            self.campaign_id, None, test["conditions"], planner_reason=test["reason"],
             reason_code=test.get("reasonCode", "MODEL"))
         return StepResult("submitted", f"{method}: {test['reason']}", result)
 
@@ -163,9 +162,8 @@ class Agent:
         return request, None
 
     def _submit_verification(self, request: Request, trigger_id: str) -> StepResult:
-        sequence = self.backend.next_planner_sequence(self.campaign_id)
         result = self.backend.submit_candidate(
-            self.campaign_id, sequence, request.conditions, planner_reason=request.reason,
+            self.campaign_id, None, request.conditions, planner_reason=request.reason,
             reason_code=REASON_VERIFICATION, role=request.role, linked_episode_id=trigger_id,
             repeat_reason=request.reason)
         return StepResult("submitted", request.reason, result)

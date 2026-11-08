@@ -71,20 +71,33 @@ Physical operations are never retried automatically (HLD 03 §17).
 | Method and path | Purpose | Notes |
 |---|---|---|
 | `POST /v1/contracts` | Create a contract version from canonical JSON | Server validates against HLD 04 §12 and returns `contractId`, `version`, `contractHash` |
+| `GET /v1/contracts` | Every contract version, newest first, with hash and approval state | Summaries only; read one version for its JSON |
 | `POST /v1/contracts/{id}/versions/{v}:approve` | Record reviewer approval | Requires the reviewer role (HLD 07) |
 | `GET /v1/contracts/{id}/versions/{v}` | Read a version | Immutable once approved |
 | `POST /v1/fixtures` | Register a fixture: ID, revision, adapter capabilities | Reviewer only; issues the bench token (HLD 07 §5) |
+| `GET /v1/fixtures` | Every fixture with health and current calibration | |
 | `GET /v1/fixtures/{id}` | Fixture health and current calibration | |
+| `POST /v1/fixtures/{id}:rotate-token` | Issue a new bench token; the old one stops working | Reviewer only; the token is shown once |
 | `POST /v1/fixtures/{id}/calibrations` | Record a calibration: per-channel gain, offset, uncertainty, meter identity, operator | Arming requires a current calibration (HLD 03 §6.2) |
 | `POST /v1/campaigns` | Create a campaign in `DRAFT` | Body: contract version, fixture, planner, seed, plan |
 | `POST /v1/campaigns/{id}:validate` | `DRAFT` → `VALIDATING` → `READY` or back | Returns structured reasons on failure |
 | `POST /v1/campaigns/{id}:arm` / `:start` / `:pause` / `:resume` / `:abort` / `:disarm` | Researcher actions | Each carries `campaignVersion`; transitions per HLD 03 §6 |
 | `POST /v1/campaigns/{id}:clear-lockout` | Record lockout review | Requires physical-presence confirmation (HLD 07 §7) |
 | `GET /v1/campaigns/{id}` | Campaign state, budget, counts | |
-| `POST /v1/campaigns/{id}/manual-candidates` | Operator-chosen candidate (PRD §18.1 demo) | Same safety validation as planner candidates; reason code `MANUAL` |
+| `GET /v1/campaigns` | Campaign list, newest first | |
+| `POST /v1/campaigns/{id}/manual-candidates` | Operator-chosen candidate (PRD §18.1 demo) | Same safety validation as planner candidates; reason code `MANUAL`; the sequence number is taken inside the insert, so it cannot collide with the Agent's; counts against the discovery budget |
+| `GET /v1/campaigns/{id}/episodes` | Finalized episodes in planner-history shape, plus refused candidates | What the planners read |
+| `GET /v1/campaigns/{id}/records` | Every episode with requested and measured values, verdict, planner reason, quality flags; refused candidates with violations | Console tables and charts (HLD 08 §5 record shape) |
+| `GET /v1/campaigns/{id}/counterexamples` | Stored counterexamples | |
+| `GET /v1/campaigns/{id}/report` | The campaign report as JSON (PRD §19.2 language, reproduction intervals, stop reason, metrics) | Same content as the exported report |
+| `GET /v1/campaigns/{id}/contract` | The campaign's contract, approvals, arming tuple and expected maximum runtime | Arming checklist (HLD 09 §5) |
+| `GET /v1/campaigns/{id}/lease` | The live lease: owner, last heartbeat, expiry, or `NEEDS_RECONCILIATION` | `null` when no episode is leased |
+| `GET /v1/compare?campaigns=a,b` | Episodes to the first confirmed failure per campaign and the HLD 06 §8 comparison (Kaplan–Meier, discovery rates, log-rank), grouped by contract hash | Statistics are computed here, never in the browser (HLD 09 §9) |
 | `GET /v1/campaigns/{id}/export` | Evidence bundle (HLD 08 §6) and generated report | |
 | `GET /v1/campaigns/{id}/events` | Server-sent events stream | State transitions, episode phases, outcomes |
-| `GET /v1/episodes/{id}` | Episode record | Requested and measured values kept separate |
+| `GET /v1/episodes/{id}` | Episode record with planner reason, bench quality flags and events, traces and leases | Requested and measured values kept separate |
+| `POST /v1/leases/{id}:reconcile` | A reviewer decides what an expired lease means (`not_executed` or `evidence_lost`) with a note | Reviewer only; the campaign then locks out for inspection |
+| `GET /healthz`, `GET /metrics` | Liveness; Prometheus text (HLD 08 §7) | No operator token; loopback only |
 | `POST /v1/proposals` | Unapproved candidate preview (the Decision HTTP form, §6) | Preview only; never creates episodes |
 
 ## 6. Agent and Decision Service
@@ -96,7 +109,7 @@ Physical operations are never retried automatically (HLD 03 §17).
 - **Determinism:** the same request returns the same response. Per-call sampler seeds are derived by hashing the campaign seed with the history length, so campaigns with nearby seeds stay independent.
 - **Inputs never include** the seeded fault trigger, the private ground-truth marker, or any field outside the contract's public observations.
 
-Agent submits a returned candidate with the Backend candidate submission (an in-process call inside the control plane; no HTTP route), idempotency key `campaignId + plannerSequence` (HLD 03 §16).
+Agent submits a returned candidate with the Backend candidate submission (an in-process call inside the control plane; no HTTP route), idempotency key `campaignId + plannerSequence` (HLD 03 §16). The Agent and manual candidates let Backend take the next free sequence inside the insert transaction, so two submitters never pick the same number; an explicit sequence still gets the idempotent replay behavior.
 
 ## 7. Bench-facing API (pull model)
 

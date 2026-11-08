@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/components/api";
+import { readActor } from "@/lib/client";
 import { lastEventId, mergeEvents } from "@/lib/live";
 import type { CampaignEvent, UiError } from "@/lib/types";
 
@@ -30,7 +31,7 @@ export function useCampaignEvents(campaignId: string, everyMs = 2000) {
   useEffect(() => {
     ref.current = []; setEvents([]);
     void reload();
-    const t = setInterval(() => void reload(), everyMs);
+    const t = setInterval(() => { if (readActor(document.cookie)) void reload(); }, everyMs);
     return () => clearInterval(t);
   }, [reload, everyMs]);
   return { events, error, reload };

@@ -6,7 +6,7 @@ import { applyForm, parseContractText, readForm } from "../src/lib/contractForm.
 import { OLED_TEMPLATE } from "../src/lib/contractTemplate.ts";
 import { errorText, isUnreachable, translateError } from "../src/lib/errors.ts";
 import { activeEpisode, benchStatus, connectionBanner, lockoutInfo, mergeEvents, shutdownStatus, stopExplanation } from "../src/lib/live.ts";
-import { compareCampaigns, replaysFor, requestedVsMeasured, resultStatement } from "../src/lib/results.ts";
+import { replaysFor, requestedVsMeasured, resultStatement } from "../src/lib/results.ts";
 import { buildSeries, scale } from "../src/lib/series.ts";
 import type { CampaignEvent, CampaignState, CampaignView, Counterexample, FixtureView, HistoryEpisode } from "../src/lib/types.ts";
 
@@ -219,21 +219,6 @@ test("replays group by the counterexample's original episode; requested and meas
   assert.equal(rm.measured[1].requested, "n/a");
 });
 
-test("comparison counts discovery-pool episodes to first failure and warns about mixed contracts", () => {
-  const a = { campaign: campaign({ id: "a" }), episodes: [ep("1", {}, "PASS", 1), ep("2", {}, "PASS", 1), ep("3", {}, "DUT_FAILURE", -1), ep("v", {}, "DUT_FAILURE", -1, "confirm", "3")] };
-  const b = { campaign: campaign({ id: "b", planner: { method: "random", config: {} }, contractHash: "h2" }), episodes: [ep("1", {}, "PASS", 1)] };
-  const cmp = compareCampaigns([a, b]);
-  assert.equal(cmp.rows[0].firstFailureAt, 3);
-  assert.equal(cmp.rows[0].censored, false);
-  assert.equal(cmp.rows[1].firstFailureAt, null);
-  assert.equal(cmp.rows[1].censored, true);
-  assert.equal(cmp.sameContract, false);
-  assert.ok(cmp.warnings.some(w => /different contract/.test(w)));
-  const verifyFirst = compareCampaigns([{ campaign: campaign(), episodes: [ep("v", {}, "DUT_FAILURE", -1, "confirm", "x"), ep("d", {}, "PASS", 1)] }]);
-  assert.equal(verifyFirst.rows[0].firstFailureAt, null, "verification episodes must not count");
-});
-
-// ---------------------------------------------------------------- contract form
 test("contract text parsing and form round-trip", () => {
   assert.equal(parseContractText("{").ok, false);
   assert.equal(parseContractText("[]").ok, false);

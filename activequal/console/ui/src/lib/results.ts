@@ -59,30 +59,3 @@ export function resultStatement(campaign: CampaignView, counterexamples: Counter
   }
   return { kind: "running", text: `Campaign is ${campaign.state}: ${total} episode(s) finished so far; no verdict on the campaign yet.` };
 }
-
-export type CompareRow = {
-  campaignId: string; planner: string; seed: number; contractHash: string; state: string;
-  discoveryBudget: number; discoveryEpisodes: number;
-  firstFailureAt: number | null; censored: boolean; verificationUsed: number;
-};
-export type Comparison = { rows: CompareRow[]; sameContract: boolean; warnings: string[] };
-
-/** Discovery-pool episodes to the first failure (HLD 06 §8). Heavy statistics stay in the Python report. */
-export function compareCampaigns(items: { campaign: CampaignView; episodes: HistoryEpisode[] }[]): Comparison {
-  const rows = items.map(({ campaign, episodes }): CompareRow => {
-    const discovery = episodes.filter(e => e.role === "discovery");
-    const idx = discovery.findIndex(e => e.outcome === "DUT_FAILURE");
-    return {
-      campaignId: campaign.id, planner: campaign.planner.method, seed: campaign.seed, contractHash: campaign.contractHash,
-      state: campaign.state, discoveryBudget: campaign.budget.discovery, discoveryEpisodes: discovery.length,
-      firstFailureAt: idx >= 0 ? idx + 1 : null, censored: idx < 0, verificationUsed: campaign.budget.verificationUsed,
-    };
-  });
-  const hashes = new Set(rows.map(r => r.contractHash));
-  const warnings: string[] = [];
-  if (hashes.size > 1) warnings.push("These campaigns use different contract hashes, so they are not comparable. Compare campaigns from one contract version only.");
-  const budgets = new Set(rows.map(r => r.discoveryBudget));
-  if (budgets.size > 1) warnings.push("The discovery budgets differ; a censored run means different things in each row.");
-  for (const r of rows) if (r.censored && r.state === "RUNNING") warnings.push(`Campaign ${r.campaignId} is still running; its row is not final.`);
-  return { rows, sameContract: hashes.size <= 1, warnings };
-}
