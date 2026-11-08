@@ -10,13 +10,21 @@ import type { CampaignContract, CampaignView, CandidateResult, Conditions, Episo
 
 type Tried = { conditions: Conditions; result: CandidateResult };
 
+/** Typed text stays as typed ("3." while typing 3.25); only a complete number is sent as a number. */
+function NumberText({ value, onChange }: { value: JsonValue; onChange: (v: JsonValue) => void }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => { if (Number(text) !== value) setText(String(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <input type="text" inputMode="decimal" value={text}
+    onChange={e => { const t = e.target.value; setText(t); onChange(/^-?\d+(\.\d+)?$/.test(t.trim()) ? Number(t) : t); }} />;
+}
+
 function ControlField({ c, value, onChange }: { c: ControlInput; value: JsonValue; onChange: (v: JsonValue) => void }) {
   if (c.kind === "boolean") return <label className="check"><input type="checkbox" checked={value === true} onChange={e => onChange(e.target.checked)} />{c.name}</label>;
   if (c.kind === "choice") return <label>{c.name}<select value={String(value)} onChange={e => onChange(e.target.value)}>{c.values.map(v => <option key={v}>{v}</option>)}</select></label>;
   return (
     <label>{c.name} <span className="hint">({formatValue(c.min)}–{formatValue(c.max)} {c.unit}, step {formatValue(c.step)}{c.activeWhen ? `; only when ${c.activeWhen}` : ""})</span>
       <input type="range" min={c.min} max={c.max} step={c.step} value={Number(value)} onChange={e => onChange(Number(e.target.value))} aria-label={`${c.name} slider`} />
-      <input type="text" inputMode="decimal" value={String(value)} onChange={e => onChange(e.target.value.trim() === "" || Number.isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value))} />
+      <NumberText value={value} onChange={onChange} />
     </label>
   );
 }
@@ -56,7 +64,11 @@ export default function ManualPage({ params }: { params: Promise<{ id: string }>
       <ErrorBox error={campaign.error ?? info.error} title="Could not load the campaign" />
       {c && c.state !== "RUNNING" ? <Notice tone="warn">The campaign is {c.state}. Manual picks are accepted only while it is RUNNING.</Notice> : null}
       <Section title="Your conditions" index={1} tag="Checked by the safety rules">
-        <div className="fields">{inputs.map(ci => <ControlField key={ci.name} c={ci} value={values[ci.name] ?? ci.nominal} onChange={v => setValues(s => ({ ...s, [ci.name]: v }))} />)}</div>
+        {(["number", "choice", "boolean"] as const).map(kind => (
+          <div key={kind} className="fields" style={{ marginBottom: 20 }}>
+            {inputs.filter(ci => ci.kind === kind).map(ci => <ControlField key={ci.name} c={ci} value={values[ci.name] ?? ci.nominal} onChange={v => setValues(s => ({ ...s, [ci.name]: v }))} />)}
+          </div>
+        ))}
         <label style={{ marginTop: 18 }}>Note (optional)<input value={note} onChange={e => setNote(e.target.value)} placeholder="who picked it, and why" /></label>
         <ErrorBox error={error} title="Pick not submitted" />
         <div className="card-actions">

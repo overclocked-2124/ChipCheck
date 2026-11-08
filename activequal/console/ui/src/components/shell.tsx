@@ -63,9 +63,9 @@ function Workspace({ campaigns, needsName }: { campaigns: CampaignView[] | null;
   const running = campaigns?.filter(c => c.state === "RUNNING") ?? [];
   const locked = campaigns?.filter(c => c.state === "LOCKED_OUT") ?? [];
   const target = locked[0] ?? running[0] ?? null;
-  const text = locked.length ? `${locked.length} locked out` : running.length ? `${running.length} running` : "No campaign running";
+  const text = campaigns === null ? "Status unknown" : locked.length ? `${locked.length} locked out` : running.length ? `${running.length} running` : "No campaign running";
   const sub = campaigns === null ? (needsName ? "enter your name to load" : "control plane not reached") : `${campaigns.length} campaign${campaigns.length === 1 ? "" : "s"} in total`;
-  const body = <><span className={`pulse${locked.length ? " bad" : running.length ? "" : " idle"}`} aria-hidden="true" /><span>{text}<small>{sub}</small></span></>;
+  const body = <><span className={`pulse${campaigns === null || locked.length ? " bad" : running.length ? "" : " idle"}`} aria-hidden="true" /><span>{text}<small>{sub}</small></span></>;
   return target ? <Link className="side-current" href={`/campaigns/${target.id}`}>{body}</Link> : <div className="side-current">{body}</div>;
 }
 

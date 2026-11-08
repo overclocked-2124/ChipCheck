@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { use, useMemo, useState } from "react";
-import { useLoad } from "@/components/api";
+import { useLoad, useNow } from "@/components/api";
 import { ArmChecklist, ClearLockout } from "@/components/campaign-controls";
 import { HistoryChart, Legend, OutcomeStrip } from "@/components/charts";
 import { CurrentEpisode, LatestOutcome, Reasons, ReconcileLease } from "@/components/live-panels";
 import { useCampaignEvents } from "@/components/use-events";
 import { ErrorBox, KeyValues, Loading, Notice, PageHeading, Section, Stat, StateBadge, ActionButton } from "@/components/ui";
 import { allowedActions, STATE_MEANING, type CampaignAction } from "@/lib/actions";
-import { activeEpisode, benchStatus, lockoutInfo, shutdownStatus, stopExplanation } from "@/lib/live";
+import { HEALTH_MAX_AGE_S } from "@/lib/arming";
+import { activeEpisode, ageSeconds, benchStatus, formatAge, lockoutInfo, shutdownStatus, stopExplanation } from "@/lib/live";
 import { tracksFrom } from "@/lib/region";
 import type { ApiResult, CampaignContract, CampaignView, FixtureView, LeaseView, RecordsResponse, UiError } from "@/lib/types";
 
@@ -27,6 +28,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
   const [reasons, setReasons] = useState<{ code: string; message: string }[]>([]);
   const [serverReasons, setServerReasons] = useState<{ code: string; message: string }[] | null>(null);
   const tracks = useMemo(() => tracksFrom(info.data?.contract), [info.data]);
+  const now = useNow(1000);
 
   const c = campaign.data;
   if (campaign.loading) return <Loading what="campaign" />;
@@ -38,13 +40,21 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
   const live = lease.data?.lease ?? null;
   const eps = records.data?.episodes ?? [];
   const rejected = records.data?.rejected ?? [];
+  const healthAge = ageSeconds(fixture.data?.healthAt, now);
+  const healthStale = healthAge === null || healthAge > HEALTH_MAX_AGE_S;
 
   function done(action: CampaignAction, result: ApiResult<unknown>) {
     setActionError(null); setReasons([]);
     if (result.ok) {
       if (action === "validate") { const r = (result.data as CampaignView).reasons ?? []; setReasons(r); setServerReasons(r); }
       void campaign.reload(); void events.reload(); void lease.reload(); void records.reload();
-    } else { setActionError(result.error); setReasons(result.error.reasons ?? []); if (action === "arm") setServerReasons(result.error.reasons ?? []); }
+    } else {
+      // HLD 09 §6: on a stale version, refresh and say so, so the person sees what changed before acting again.
+      const stale = result.error.code === "STALE_VERSION";
+      setActionError(stale ? { ...result.error, message: `${result.error.message}. The page has refreshed to the current state; check it before acting again.` } : result.error);
+      setReasons(result.error.reasons ?? []); if (action === "arm") setServerReasons(result.error.reasons ?? []);
+      if (stale) { void campaign.reload(); void events.reload(); }
+    }
   }
   let n = c.state === "READY" || c.state === "LOCKED_OUT" ? 2 : 1;   // the checklist or lockout card is section 02
   const next = () => ++n;
@@ -65,7 +75,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           <p>Clearing the lockout needs a reviewer; see below.</p>
         </Notice>
       ) : null}
-      {stop ? <Notice tone={c.state === "COMPLETED" ? "ok" : c.state === "LOCKED_OUT" ? "bad" : "info"}><strong>{stop.headline}.</strong> <code>{stop.reasonCode}</code> {stop.reason} ({stop.actor})</Notice> : null}
+      {stop && !lock ? <Notice tone={c.state === "COMPLETED" ? "ok" : c.state === "LOCKED_OUT" ? "bad" : "info"}><strong>{stop.headline}.</strong> <code>{stop.reasonCode}</code> {stop.reason} ({stop.actor})</Notice> : null}
       <Section title="Actions" index={1} tag="Operator">
         <div className="row">
           {allowedActions(c.state).filter(a => !a.reviewer && !a.checklistOnly).map(a =>
@@ -90,11 +100,13 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       <div className="grid2">
         <CurrentEpisode index={next()} current={activeEpisode(log)} lease={live} maxEpisodeS={info.data?.maxEpisodeS ?? null} />
         <Section title="Bench" index={next()} tag={c.fixtureId}>
-          <div className="bench" role="list" aria-label="Bench status">
+          {healthStale ? <Notice tone="warn"><strong>Bench state unknown.</strong> The last health report is {formatAge(healthAge)}; the tiles below show that old report, not the bench now. Check the fixture and the E-stop in person.</Notice> : null}
+          <div className="bench" role="list" aria-label="Bench status" style={healthStale ? { opacity: 0.55, marginTop: 14 } : undefined}>
+            <div role="listitem" className={healthStale ? "unk" : "ok"}>Health report<small>{formatAge(healthAge)}{healthStale ? " (stale)" : ""}</small></div>
             {benchStatus(fixture.data).map(l => (
-              <div key={l.id} role="listitem" className={l.ok === null ? "unk" : l.ok ? "ok" : "bad"}>{l.label}<small>{l.detail}</small></div>
+              <div key={l.id} role="listitem" className={l.ok === null || healthStale ? "unk" : l.ok ? "ok" : "bad"}>{l.label}<small>{l.detail}{healthStale ? " (last known)" : ""}</small></div>
             ))}
-            <div role="listitem" className={shutdown.confirmed === null ? "unk" : shutdown.confirmed ? "ok" : "bad"}>Shutdown<small>{shutdown.text}</small></div>
+            <div role="listitem" className={shutdown.confirmed === null || (healthStale && shutdown.confirmed) ? "unk" : shutdown.confirmed ? "ok" : "bad"}>Shutdown<small>{shutdown.text}</small></div>
           </div>
         </Section>
       </div>

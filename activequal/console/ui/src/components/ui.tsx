@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { actionSpec, stateTone, STATE_MEANING, type CampaignAction } from "@/lib/actions";
 import { api } from "@/components/api";
 import type { ApiResult, CampaignState, UiError } from "@/lib/types";
@@ -158,7 +159,11 @@ export function PassphraseModal({ request, onClose }: { request: PassphraseReque
     else if (result.error.code === "PERMISSION_DENIED") setError(result.error);
     else { request.onDone(result); onClose(); }
   }
-  return (
+  // Rendered on <body>: an animated ancestor (transform) would otherwise trap position: fixed inside its card.
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  useEffect(() => setHost(document.body), []);
+  if (!host) return null;
+  return createPortal(
     <div className="modal-backdrop" onKeyDown={e => { if (e.key === "Escape") onClose(); }}>
       <form className="modal" role="dialog" aria-modal="true" aria-labelledby="pp-title" onSubmit={submit}>
         <h2 id="pp-title">{request.title}</h2>
@@ -173,7 +178,8 @@ export function PassphraseModal({ request, onClose }: { request: PassphraseReque
           <button type="button" className="secondary" onClick={onClose} disabled={busy}>Cancel</button>
         </div>
       </form>
-    </div>
+    </div>,
+    host,
   );
 }
 
