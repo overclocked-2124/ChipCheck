@@ -11,7 +11,7 @@ This document defines the Console's pages and flows: contract review, arming, li
 
 ## 2. Current state
 
-The Console today is a five-step setup wizard (`activequal/console/ui/src/components/setup-wizard.tsx`) that previews unapproved candidates through `/api/proposals`. It cannot arm a campaign, stream episodes, show failures, or produce a report. It still sends the legacy setup shape, not contract v2.
+The Console (`activequal/console/ui`) edits and approves contract v2 versions, registers fixtures and records calibrations, creates campaigns, arms them through the checklist, shows a live campaign (by polling; the SSE route exists but is not used yet), results, export and comparison. HLD 10 §2 lists what is still missing.
 
 ## 3. Principles
 

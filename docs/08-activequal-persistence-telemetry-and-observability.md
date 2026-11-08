@@ -93,7 +93,7 @@ Seeded-fault ground-truth labels are exported separately and only after evaluati
 **Recommended:**
 
 - **Structured logs:** JSON lines with `campaignId`, `episodeId`, `leaseId`, and `phase` on every line, written by each process to a rotating local file.
-- **Metrics:** exposed by the control plane at `GET /metrics` (Prometheus text format) and summarized in the Console.
+- **Metrics:** exposed by the control plane at `GET /metrics` (Prometheus text format). The Console does not read it (HLD 07: not a human route).
 
 | Metric | Why |
 |---|---|
@@ -128,7 +128,7 @@ Errors must reach the Console, not only the logs (HLD 03 §22).
 |---|---|
 | Database | SQLite (WAL) for the MVP behind a repository interface; one writer, matching the single control-plane process (HLD 10 §5.3) |
 | Trace format | Parquet for sampled series; raw capture plus JSON sidecar for scope data. This document owns the trace format; HLD 05 refers here |
-| Metrics backend | Prometheus text endpoint, read by the Console; no external monitoring stack |
+| Metrics backend | Prometheus text endpoint on the control plane; no external monitoring stack |
 
 ## 11. Acceptance checklist
 

@@ -66,7 +66,7 @@ The goal is to make every physical action explainable and recoverable. At any mo
 | Component | State-machine responsibility |
 |---|---|
 | Console | Requests campaign actions and displays state; does not directly change hardware state |
-| BFF Service | Adds trusted researcher/project context and forwards valid user actions |
+| Console server routes | Add the operator token and recorded actor, forward valid user actions (no separate BFF, HLD 01 §2.1) |
 | Backend Service | Owns authoritative campaign, candidate, episode, lease, and outcome records |
 | Agent Service | Owns campaign planning lifecycle, obtains history/domain/configuration/budget from Backend, supplies Decision context, submits returned candidates, accounts for budget, and schedules confirmation/minimization work |
 | Decision Service | Implements the common planner interface and candidate-selection algorithms; returns a candidate and rationale for supplied context |

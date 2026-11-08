@@ -45,7 +45,7 @@ The control plane listens on loopback only for the MVP. The bench process never 
 | Versioning | Path prefix `/v1`. A breaking change adds `/v2`; both run until clients move. |
 | Identity | Every durable entity has a server-generated ID (UUIDv7 recommended, sortable by creation time). |
 | Concurrency | State-changing campaign requests carry `campaignVersion`. A stale version returns `409 STALE_VERSION` (HLD 03 §20). |
-| Idempotency | Requests listed in §8 carry an `Idempotency-Key` header. A repeat with the same key and body returns the original response; the same key with a different body returns `409 IDEMPOTENCY_MISMATCH`. |
+| Idempotency | The keys of §8 come from the request body (`campaignId + plannerSequence` for candidates, `episodeId + attempt + manifestHash` for results), not from a header. A repeat with the same key and body returns the original response; the same key with a different body returns `409 IDEMPOTENCY_MISMATCH`. |
 | Contract binding | Every bench message carries `contractHash` and `fixtureId`. A mismatch is rejected (HLD 03 §11.2). |
 | Time | RFC 3339 UTC timestamps from the sender. Bench messages also carry a monotonic `controllerTimeMs` for trace alignment. |
 | Units | Values travel in the units declared by the contract control or observation; no implicit conversion. |
@@ -85,7 +85,7 @@ Physical operations are never retried automatically (HLD 03 §17).
 | `GET /v1/campaigns/{id}/export` | Evidence bundle (HLD 08 §6) and generated report | |
 | `GET /v1/campaigns/{id}/events` | Server-sent events stream | State transitions, episode phases, outcomes |
 | `GET /v1/episodes/{id}` | Episode record | Requested and measured values kept separate |
-| `POST /v1/proposals` | Unapproved candidate preview (the Decision HTTP form, §6) | Current console wizard path; never creates episodes |
+| `POST /v1/proposals` | Unapproved candidate preview (the Decision HTTP form, §6) | Preview only; never creates episodes |
 
 ## 6. Agent and Decision Service
 
@@ -215,7 +215,7 @@ Backend -> Oracle        classify(evidence, contract)       -> DUT_FAILURE, marg
 |---|---|
 | DUT command path (§10) | Timing-critical commands go through the MCU, so their timestamps share the MCU clock with the event markers and the optical capture |
 | Trace format | Owned by HLD 08 §10; this document only carries trace references and checksums |
-| Schema publication | JSON Schema generated from the typed models, checked in and versioned; CI fails if the checked-in schema differs from the generated one |
+| Schema publication | Planned: JSON Schema generated from the typed models and checked in, with a CI diff check. Not built yet; the Python parsers are the reference today |
 
 ## 14. Acceptance checklist
 

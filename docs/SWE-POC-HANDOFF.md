@@ -15,12 +15,12 @@ This guide predates the work below. Where it disagrees with the HLDs, the HLDs w
 | §3 Decision 1, tech stack | **Decided:** Python in a control-plane process and a bench process, Next.js Console, no separate BFF (HLD 01 §2.1). |
 | §3 Decision 2, structured contract | **Decided:** contract v2 (HLD 04 §12). |
 | §3 Decision 3, robustness | **Decided, with a corrected formula:** Option A normalized headroom for the planner and Option B guard-banded verdict (HLD 04 §13). The formula in §3 below is not bounded to [−1, +1] as claimed. |
-| §3 Decision 4, simulator profiles | Designed. B1 and B2 were simulated during evaluation; the in-memory simulator adapter is not built. |
+| §3 Decision 4, simulator profiles | Designed. Built: in-memory simulator adapter with profiles B1a, B1b, B1w, B2, B3. |
 | §3 Decision 5, campaign phases | Recorded in HLD 04 §14. Simulation showed the coverage phase and forced exploration do not help; see HLD 06. |
 | §4, three `decision.py` bugs | **Fixed** with regression tests. |
-| §5, planner plugins | Interface and registry built with `tpe`, `gp`, `random`, `grid`. Coverage and staged-hybrid planners not built. In simulation GP-BO beat TPE on two benchmarks and lost on one (HLD 06 §3). |
-| §6, BenchAdapter | Not started. The `loop://` idea in §6.2 does not work (pyserial's `loop://` echoes the host's own writes); HLD 10 §5.3 replaces it with an in-process MCU emulator behind a byte-stream transport. |
-| §7, milestones | Milestone 1 partly done; Milestones 2 to 4 not started. HLD 10 holds the current plan. |
+| §5, planner plugins | Built: `tpe`, `gp`, `random`, `grid`, `fixed_corner`, `coverage`, `manual`. Staged-hybrid not built. In simulation GP-BO beat TPE on two benchmarks and lost on one (HLD 06 §3). |
+| §6, BenchAdapter | Built (simulator and serial host adapter, tested against the in-process MCU emulator). The `loop://` idea in §6.2 does not work (pyserial's `loop://` echoes the host's own writes); HLD 10 §5.3 replaces it with an in-process MCU emulator behind a byte-stream transport. |
+| §7, milestones | Software for Milestones 1 to 4 built on the simulator; hardware work open. HLD 10 §2 holds the current state. |
 
 Further defects found and fixed after this guide was written: GP proposal starvation, unbounded memory on huge numeric ranges, unvalidated numeric controls, and correlated random streams between campaigns with nearby seeds.
 

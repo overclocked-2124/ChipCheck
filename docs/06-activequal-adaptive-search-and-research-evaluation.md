@@ -21,8 +21,8 @@ The common interface is `propose(domain, history, count, seed, config) -> candid
 | `grid` | Baseline for small spaces (at most 10,000 points) | Built |
 | `tpe` | Multivariate, grouped Optuna TPE | Built; adaptive method, no heavy dependencies |
 | `gp` | Optuna GP-BO with bounded asks and a random fallback | Built; adaptive method, needs the optional torch dependency |
-| coverage | Pairwise covering array plus space-filling voltages | Evaluated as an Agent-level phase; must become a planner so it uses the common interface (HLD 01 CTX-09) |
-| fixed/corner | Nominal point and reviewed corners, a human-style fixed plan | **Not built.** Required as a baseline by HLD 01 §3.2, and the PRD exit criteria require beating it |
+| coverage | Pairwise covering array plus space-filling voltages | Built as the `coverage` planner (Halton numeric values); the Agent uses it for the optional coverage phase |
+| fixed/corner | Nominal point and reviewed corners, a human-style fixed plan | Built as the `fixed_corner` planner. Required as a baseline by HLD 01 §3.2, and the PRD exit criteria require beating it |
 
 **ActiveQual decision (HLD 01, decision 12):** multivariate TPE and GP-BO are the adaptive methods, random the baseline. The evidence in §3 supports keeping both: neither dominates the other.
 
