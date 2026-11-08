@@ -242,6 +242,21 @@ table.grid input { min-height: 38px; padding: 8px 10px; }
 .bench .unk::before { background: var(--warn); }
 .bench small { display: block; color: var(--muted); font-weight: 500; font-size: 11px; }
 
+/* ---------------------------------------------------------------- outcome strip and inline controls */
+.strip { display: flex; flex-wrap: wrap; gap: 4px; }
+.strip .cell { width: 16px; height: 16px; border-radius: 4px; background: var(--c); border: 2px solid var(--c); transition: transform 160ms var(--ease); }
+.strip .cell.verify { background: #fff; }
+.strip .cell:hover, .strip .cell:focus-visible { transform: scale(1.35); }
+label.inline { flex-direction: row; align-items: center; gap: 8px; }
+label.inline select { width: auto; min-height: 38px; padding: 7px 10px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 6px; background: var(--neutral-bg); font-size: 11px; font-weight: 700; color: var(--ink-2); }
+.chip.bad { background: var(--bad-bg); color: var(--bad); }
+.chip.ok { background: var(--ok-bg); color: var(--ok); }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.steps li { display: grid; grid-template-columns: 110px 1fr auto; gap: 12px; align-items: center; padding: 9px 12px; border: 1px solid var(--line-soft); border-radius: 8px; font-size: 12px; }
+.steps li .role { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--quiet); }
+.big-stop { font-size: 14px; padding: 14px 22px; }
+
 /* ---------------------------------------------------------------- event log, report, modal, misc */
 .timeline { max-height: 26rem; overflow: auto; }
 .timeline td:first-child { font-family: var(--mono); font-size: 11px; color: var(--quiet); white-space: nowrap; }

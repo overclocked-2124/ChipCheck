@@ -72,7 +72,9 @@ export default function FixturePage() {
         <Section title="Current calibration" id="current" index={3} tag={cal ? "Recorded" : "Missing"}>
           {cal ? (
             <>
-              <KeyValues rows={[["Meter", cal.meter], ["Operator", cal.operator], ["Recorded", cal.createdAt], ["Valid until", `${cal.validUntil}${Date.parse(cal.validUntil) <= Date.now() ? "  (EXPIRED)" : ""}`]]} />
+              <KeyValues rows={[["Meter", cal.meter], ["Operator", cal.operator],
+                ["Age", `${Math.max(0, Math.floor((Date.now() - Date.parse(cal.createdAt)) / 86400000))} day(s) (recorded ${cal.createdAt.slice(0, 16).replace("T", " ")})`],
+                ["Valid until", `${cal.validUntil.slice(0, 16).replace("T", " ")}${Date.parse(cal.validUntil) <= Date.now() ? "  (EXPIRED: arming is refused)" : ""}`]]} />
               <div className="table-wrap" style={{ marginTop: 16 }}><table className="grid"><thead><tr><th>Channel</th><th>Gain</th><th>Offset</th><th>Uncertainty (U, k=2)</th></tr></thead>
                 <tbody>{Object.entries(cal.channels).map(([k, v]) => <tr key={k}><td><code>{k}</code></td><td className="num">{v.gain}</td><td className="num">{v.offset}</td><td className="num">{v.uncertainty}</td></tr>)}</tbody></table></div>
             </>
@@ -80,6 +82,10 @@ export default function FixturePage() {
         </Section>
       ) : null}
       <Section title="Record a calibration" id="calibrate" index={4} tag="Trusted meter">
+        <div className="note" style={{ marginBottom: 18 }}><strong>Running a calibration.</strong> Measure each rail with a trusted meter at its minimum, midpoint and maximum
+          test values (PRD §11.5), save the readings as JSON, then fit and record them with
+          <pre className="report" style={{ margin: "10px 0" }}>python -m activequal.tools.calibrate points.json --operator NAME --fixture-id {id} --post</pre>
+          The tool refuses fewer than three points or a gain more than 5% from 1. You can also type a fitted result below.</div>
         <form className="stack" onSubmit={e => { e.preventDefault(); void saveCalibration(); }}>
           <div className="table-wrap"><table className="grid"><thead><tr><th>Channel</th><th>Gain</th><th>Offset</th><th>Uncertainty U</th></tr></thead>
             <tbody>{rows.map((r, i) => (

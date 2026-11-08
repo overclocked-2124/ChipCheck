@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { api, recentAdd, recentGet } from "@/components/api";
-import { CopyBox, ErrorBox, Notice, PageHeading, PassphraseModal, Section, type PassphraseRequest } from "@/components/ui";
+import { api, recentAdd, recentGet, useLoad, useNow } from "@/components/api";
+import { CopyBox, Empty, ErrorBox, Loading, Notice, PageHeading, PassphraseModal, Section, type PassphraseRequest } from "@/components/ui";
+import { ageSeconds, benchStatus, formatAge } from "@/lib/live";
+import type { FixtureView } from "@/lib/types";
 import type { ApiResult, UiError } from "@/lib/types";
 
 type Registered = { fixtureId: string; token: string };
@@ -21,6 +23,8 @@ export default function FixturesPage() {
   const [openId, setOpenId] = useState("");
   const [recents, setRecents] = useState<string[]>([]);
   useEffect(() => setRecents(recentGet("fixtures")), []);
+  const fixtures = useLoad<{ fixtures: FixtureView[] }>("/v1/fixtures", 5000);
+  const now = useNow(2000);
 
   function register() {
     setError(null); setToken(null);
@@ -31,7 +35,7 @@ export default function FixturesPage() {
       confirmLabel: "Register",
       run: passphrase => api<Registered>("/v1/fixtures", { body: { fixtureId: fixtureId.trim(), revision: revision.trim(), capabilities: caps, ...(mcuSha.trim() ? { approvedMcuFirmwareSha256: mcuSha.trim() } : {}) }, passphrase }),
       onDone: (r: ApiResult<unknown>) => {
-        if (r.ok) { const reg = r.data as Registered; setToken(reg); recentAdd("fixtures", reg.fixtureId); setRecents(recentGet("fixtures")); }
+        if (r.ok) { const reg = r.data as Registered; setToken(reg); recentAdd("fixtures", reg.fixtureId); setRecents(recentGet("fixtures")); void fixtures.reload(); }
         else setError(r.error);
       },
     });
@@ -41,7 +45,29 @@ export default function FixturesPage() {
     <>
       <PageHeading eyebrow="Configure" step="Fixtures" title="Fixtures and calibration"
         intro="A fixture is one physical bench and its wiring. Register it once, record a calibration against a trusted meter, and keep its health current." />
-      <Section title="Register a fixture" id="register" index={1} tag="Reviewer">
+      <Section title="Fixtures" id="list" index={1} tag={`${fixtures.data?.fixtures.length ?? 0} registered`}>
+        {fixtures.loading ? <Loading what="fixtures" /> : null}
+        <ErrorBox error={fixtures.error} title="Could not list fixtures" />
+        {fixtures.data && fixtures.data.fixtures.length === 0 ? <Empty>No fixtures yet. A reviewer registers one below.</Empty> : null}
+        {fixtures.data?.fixtures.length ? (
+          <div className="table-wrap"><table className="grid">
+            <thead><tr><th>Fixture</th><th>Revision</th><th>Bench health</th><th>Reported</th><th>Calibration</th><th></th></tr></thead>
+            <tbody>{fixtures.data.fixtures.map(f => {
+              const bad = benchStatus(f).filter(l => l.ok !== true);
+              const cal = f.calibration;
+              const expired = cal ? Date.parse(cal.validUntil) <= now : true;
+              return (
+                <tr key={f.id}><td><code>{f.id}</code></td><td>{f.revision}</td>
+                  <td>{f.health ? (bad.length ? <span className="badge badge-bad">{bad.map(l => l.label).join(", ")}</span> : <span className="badge badge-ok">healthy</span>) : <span className="badge badge-warn">not reported</span>}</td>
+                  <td>{formatAge(ageSeconds(f.healthAt, now))}</td>
+                  <td>{cal ? <span className={expired ? "bad-text" : undefined}>{expired ? "expired " : "valid until "}{cal.validUntil.slice(0, 10)}</span> : <span className="bad-text">none</span>}</td>
+                  <td><Link href={`/fixtures/${encodeURIComponent(f.id)}`}>Open →</Link></td></tr>
+              );
+            })}</tbody>
+          </table></div>
+        ) : null}
+      </Section>
+      <Section title="Register a fixture" id="register" index={2} tag="Reviewer">
         <form onSubmit={e => { e.preventDefault(); register(); }}>
           <div className="fields">
             <label>Fixture id<input value={fixtureId} onChange={e => setFixtureId(e.target.value)} required placeholder="bench-A" /></label>
@@ -65,13 +91,12 @@ export default function FixturesPage() {
           </Notice>
         ) : null}
       </Section>
-      <Section title="Open a fixture" id="open" index={2} tag="Health · calibration">
+      <Section title="Open a fixture" id="open" index={3} tag="By id">
         <form className="row openform" onSubmit={e => { e.preventDefault(); if (openId.trim()) router.push(`/fixtures/${encodeURIComponent(openId.trim())}`); }}>
           <label style={{ flex: 1 }}>Fixture id<input value={openId} onChange={e => setOpenId(e.target.value)} required placeholder="bench-A" /></label>
           <button type="submit">Open <span className="arrow" aria-hidden="true">→</span></button>
         </form>
         {recents.length ? <p className="hint">Recently used on this browser: {recents.map(r => <span key={r}><Link href={`/fixtures/${encodeURIComponent(r)}`}>{r}</Link>{" "}</span>)}</p> : null}
-        <p className="hint">The control plane has no fixture list endpoint yet, so fixtures are opened by id.</p>
       </Section>
       {modal ? <PassphraseModal request={modal} onClose={() => setModal(null)} /> : null}
     </>

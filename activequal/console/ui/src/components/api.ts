@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { callApi, type CallOptions } from "@/lib/client";
+import { callApi, readActor, type CallOptions } from "@/lib/client";
 import { isUnreachable } from "@/lib/errors";
 import type { ApiResult, UiError } from "@/lib/types";
 
@@ -48,7 +48,8 @@ export function useLoad<T>(path: string | null, everyMs = 0): Loaded<T> {
     alive.current = true;
     setData(null); setError(null); setLoading(path !== null);
     void reload();
-    const timer = everyMs > 0 ? setInterval(() => { void reload(); }, everyMs) : null;
+    // Without a name every call is refused (UNAUTHENTICATED); wait for the name instead of polling into 401s.
+    const timer = everyMs > 0 ? setInterval(() => { if (readActor(document.cookie)) void reload(); }, everyMs) : null;
     return () => { alive.current = false; if (timer) clearInterval(timer); };
   }, [path, everyMs, reload]);
   return { data, error, loading, lastOkAt, reload };
