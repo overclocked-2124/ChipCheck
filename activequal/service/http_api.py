@@ -21,7 +21,7 @@ from typing import Any, Callable, Iterator
 from urllib.parse import parse_qs, urlsplit
 
 from activequal.model.errors import InvalidRequest
-from activequal.service import queries
+from activequal.service import queries, views
 from activequal.service.auth import AuthConfig, bearer_token
 from activequal.service.backend import Actor, Backend
 from activequal.service.errors import BackendError, invalid, not_found
@@ -104,9 +104,11 @@ ROUTES: list[tuple[str, re.Pattern[str], str, str]] = [
     ("GET", re.compile(r"^/healthz$"), "healthz", "none"),
     ("GET", re.compile(r"^/metrics$"), "metrics", "none"),
     ("POST", re.compile(r"^/v1/contracts$"), "create_contract", "human"),
+    ("GET", re.compile(r"^/v1/contracts$"), "list_contracts", "human"),
     ("POST", re.compile(r"^/v1/contracts/(?P<id>[^/:]+)/versions/(?P<version>\d+):approve$"), "approve_contract", "reviewer"),
     ("GET", re.compile(r"^/v1/contracts/(?P<id>[^/:]+)/versions/(?P<version>\d+)$"), "get_contract", "human"),
     ("POST", re.compile(r"^/v1/fixtures$"), "register_fixture", "reviewer"),
+    ("GET", re.compile(r"^/v1/fixtures$"), "list_fixtures", "human"),
     ("GET", re.compile(r"^/v1/fixtures/(?P<id>[^/:]+)$"), "get_fixture", "human"),
     ("POST", re.compile(r"^/v1/fixtures/(?P<id>[^/:]+)/calibrations$"), "record_calibration", "human"),
     ("POST", re.compile(r"^/v1/fixtures/(?P<id>[^/:]+):rotate-token$"), "rotate_token", "reviewer"),
@@ -120,6 +122,11 @@ ROUTES: list[tuple[str, re.Pattern[str], str, str]] = [
     ("GET", re.compile(r"^/v1/campaigns/(?P<id>[^/:]+)/episodes$"), "campaign_episodes", "human"),
     ("GET", re.compile(r"^/v1/campaigns/(?P<id>[^/:]+)/counterexamples$"), "campaign_counterexamples", "human"),
     ("GET", re.compile(r"^/v1/campaigns/(?P<id>[^/:]+)/export$"), "campaign_export", "human"),
+    ("GET", re.compile(r"^/v1/campaigns/(?P<id>[^/:]+)/report$"), "campaign_report", "human"),
+    ("GET", re.compile(r"^/v1/campaigns/(?P<id>[^/:]+)/records$"), "campaign_records", "human"),
+    ("GET", re.compile(r"^/v1/campaigns/(?P<id>[^/:]+)/contract$"), "campaign_contract", "human"),
+    ("GET", re.compile(r"^/v1/campaigns/(?P<id>[^/:]+)/lease$"), "campaign_lease", "human"),
+    ("GET", re.compile(r"^/v1/compare$"), "compare", "human"),
     ("GET", re.compile(r"^/v1/episodes/(?P<id>[^/:]+)$"), "get_episode", "human"),
     ("POST", re.compile(r"^/v1/leases/(?P<id>[^/:]+):reconcile$"), "reconcile_lease", "reviewer"),
     ("POST", re.compile(r"^/v1/proposals$"), "proposals", "human"),
@@ -265,10 +272,9 @@ class Api:
 
     def _manual_candidate(self, request, actor, params) -> Response:
         body = _json_body(request)
-        sequence = self.backend.next_planner_sequence(params["id"])
         note = (_field(body, "note", str, optional=True) or "").strip()
         result = self.backend.submit_candidate(
-            params["id"], sequence, _field(body, "conditions", dict),
+            params["id"], None, _field(body, "conditions", dict),
             planner_reason="Operator-chosen candidate" + (f": {note}" if note else ""), reason_code="MANUAL", actor=actor)
         return Response(201, result)
 
@@ -285,7 +291,30 @@ class Api:
         return Response(200, self.exporter(self.backend, params["id"]))
 
     def _get_episode(self, request, actor, params) -> Response:
-        return Response(200, self.backend.get_episode(params["id"]))
+        return Response(200, views.episode_detail(self.backend, params["id"]))
+
+    # ------------------------------------------------------- Console read views (HLD 09 §5)
+
+    def _list_contracts(self, request, actor, params) -> Response:
+        return Response(200, {"contracts": views.list_contracts(self.backend)})
+
+    def _list_fixtures(self, request, actor, params) -> Response:
+        return Response(200, {"fixtures": views.list_fixtures(self.backend)})
+
+    def _campaign_report(self, request, actor, params) -> Response:
+        return Response(200, views.campaign_report(self.backend, params["id"]))
+
+    def _campaign_records(self, request, actor, params) -> Response:
+        return Response(200, views.campaign_records(self.backend, params["id"]))
+
+    def _campaign_contract(self, request, actor, params) -> Response:
+        return Response(200, views.campaign_contract(self.backend, params["id"]))
+
+    def _campaign_lease(self, request, actor, params) -> Response:
+        return Response(200, views.campaign_lease(self.backend, params["id"]))
+
+    def _compare(self, request, actor, params) -> Response:
+        return Response(200, views.compare(self.backend, request.query.get("campaigns", "").split(",")))
 
     def _reconcile_lease(self, request, actor, params) -> Response:
         body = _json_body(request)

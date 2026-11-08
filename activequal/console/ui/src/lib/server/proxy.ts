@@ -27,9 +27,11 @@ const ID = "[^/:]+";
 export const ALLOWED_ROUTES: Route[] = [
   { method: "GET", pattern: /^\/healthz$/, reviewer: false },
   { method: "POST", pattern: /^\/v1\/contracts$/, reviewer: false },
+  { method: "GET", pattern: /^\/v1\/contracts$/, reviewer: false },
   { method: "POST", pattern: new RegExp(`^/v1/contracts/${ID}/versions/\\d+:approve$`), reviewer: true },
   { method: "GET", pattern: new RegExp(`^/v1/contracts/${ID}/versions/\\d+$`), reviewer: false },
   { method: "POST", pattern: /^\/v1\/fixtures$/, reviewer: true },
+  { method: "GET", pattern: /^\/v1\/fixtures$/, reviewer: false },
   { method: "GET", pattern: new RegExp(`^/v1/fixtures/${ID}$`), reviewer: false },
   { method: "POST", pattern: new RegExp(`^/v1/fixtures/${ID}/calibrations$`), reviewer: false },
   { method: "POST", pattern: new RegExp(`^/v1/fixtures/${ID}:rotate-token$`), reviewer: true },
@@ -40,7 +42,8 @@ export const ALLOWED_ROUTES: Route[] = [
   { method: "GET", pattern: new RegExp(`^/v1/campaigns/${ID}$`), reviewer: false },
   { method: "POST", pattern: new RegExp(`^/v1/campaigns/${ID}/manual-candidates$`), reviewer: false },
   { method: "GET", pattern: new RegExp(`^/v1/campaigns/${ID}/events$`), reviewer: false },
-  { method: "GET", pattern: new RegExp(`^/v1/campaigns/${ID}/(episodes|counterexamples|export)$`), reviewer: false },
+  { method: "GET", pattern: new RegExp(`^/v1/campaigns/${ID}/(episodes|counterexamples|export|report|records|contract|lease)$`), reviewer: false },
+  { method: "GET", pattern: /^\/v1\/compare$/, reviewer: false },
   { method: "GET", pattern: new RegExp(`^/v1/episodes/${ID}$`), reviewer: false },
   { method: "POST", pattern: new RegExp(`^/v1/leases/${ID}:reconcile$`), reviewer: true },
   { method: "POST", pattern: /^\/v1\/proposals$/, reviewer: false },
@@ -119,7 +122,9 @@ export async function proxyRequest(request: Request, segments: string[], deps: P
   }
   const url = new URL(request.url);
   const after = url.searchParams.get("after");
-  const query = after !== null && /^\d+$/.test(after) ? `?after=${after}` : "";
+  const campaigns = url.searchParams.get("campaigns");
+  const query = after !== null && /^\d+$/.test(after) ? `?after=${after}`
+    : campaigns !== null && /^[A-Za-z0-9_-]+(,[A-Za-z0-9_-]+)*$/.test(campaigns) ? `?campaigns=${campaigns}` : "";
   const doFetch = deps.fetchImpl ?? fetch;
   let upstream: Response;
   try {

@@ -8,6 +8,7 @@ proposals; Backend and Controller remain the authoritative safety checks.
 from __future__ import annotations
 
 import math
+from decimal import Decimal
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -154,9 +155,24 @@ def domain_from_setup(setup: Any) -> SearchDomain:
 
 # ---------------------------------------------------------------- conditions
 
+def snap(distribution: Any, value: Any) -> Any:
+    """Put a float on its decimal step grid exactly: 3.5300000000000002 becomes 3.53.
+
+    Optuna and the coverage designs compute grid values in binary floating point, and the safety rules check the
+    grid in exact decimal, so an unsnapped value is refused as OFF_STEP_GRID and wastes a proposal.
+    """
+    if (not isinstance(distribution, optuna.distributions.FloatDistribution) or distribution.step is None
+            or not isinstance(value, float) or not math.isfinite(value)):
+        return value
+    step, low = Decimal(str(distribution.step)), Decimal(str(distribution.low))
+    index = ((Decimal(repr(value)) - low) / step).to_integral_value()
+    return float(min(max(low + index * step, low), Decimal(str(distribution.high))))
+
+
 def canonical(domain: SearchDomain, conditions: dict[str, Any]) -> dict[str, Any]:
-    """Inactive controls are pinned to nominal so equivalent candidates dedupe."""
-    result = dict(conditions)
+    """Values are snapped onto their step grid, and inactive controls pinned to nominal so equivalent candidates dedupe."""
+    result = {name: snap(domain.controls[name].distribution, value) if name in domain.controls else value
+              for name, value in conditions.items()}
     for name, control in domain.controls.items():
         atom = control.active_when
         if atom is not None and not atom_matches(atom, result):
