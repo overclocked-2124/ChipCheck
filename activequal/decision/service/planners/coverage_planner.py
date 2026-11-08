@@ -91,11 +91,23 @@ class CoveragePlanner:
             {c.name: grid_value(c, 0) for c in numeric},
             {c.name: grid_value(c, step_count(c)) for c in numeric},
         ]
-        counter = 0
+        # The Agent asks for one candidate at a time, so earlier rows are already in the history: a row whose
+        # discrete combination was run n times is skipped in the first n cycles, and the Halton stream resumes
+        # where the history left off.
+        done: dict[tuple, int] = {}
+        for record in history:
+            if record.conditions is not None:
+                key = tuple(record.conditions.get(c.name) for c in discrete)
+                done[key] = done.get(key, 0) + 1
+        counter = len(history)
         for cycle in itertools.count():
             progressed = False
             for row_index, row in enumerate(rows):
                 point = {c.name: values[k][row[k]] for k, c in enumerate(discrete)}
+                key = tuple(point[c.name] for c in discrete)
+                if done.get(key, 0) > cycle:
+                    progressed = True                # covered by an earlier call; still counts as progress
+                    continue
                 for attempt in range(TRIES_PER_ROW):
                     if collector.full:
                         break

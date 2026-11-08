@@ -33,7 +33,8 @@ class AgentCampaignTests(unittest.TestCase):
         self.assertEqual((cx["reproductions"], cx["attempts"]), (2, 2))
         conditions = cx["minimized"]["conditions"]
         self.assertTrue(conditions["redLed"] and not conditions["greenLed"] and conditions["workload"] == "oled_refresh")
-        self.assertEqual(cx["minimized"]["necessity"], {"greenLed": "necessary"})
+        self.assertEqual(cx["minimized"]["necessity"].get("greenLed"), "necessary")
+        self.assertNotIn("oledRailV", cx["minimized"]["kept"])   # its nominal-value replay was inconclusive, not a pass
         voltage = cx["intervals"]["intervals"]["oledRailV"]
         self.assertTrue(voltage["low"] <= 3.25 <= voltage["high"])
         self.assertTrue(3.17 <= voltage["low"] <= 3.23 and 3.27 <= voltage["high"] <= 3.33, voltage)   # seeded 3.20..3.30
@@ -115,11 +116,15 @@ class AgentCampaignTests(unittest.TestCase):
         view = rig.backend.get_campaign(rig.world.campaign_id)
         self.assertEqual(view["state"], "COMPLETED")
         self.assertEqual(view["budget"]["discoveryUsed"], 30)
-        (cx,) = rig.backend.counterexamples(rig.world.campaign_id)
+        cxs = rig.backend.counterexamples(rig.world.campaign_id)
+        self.assertGreaterEqual(len(cxs), 1)          # continue mode may confirm further, distinct regions
+        cx = cxs[0]
         voltage = cx["intervals"]["intervals"]["oledRailV"]
         history = rig.backend.episode_history(rig.world.campaign_id)
-        trigger_index = next(i for i, h in enumerate(history) if h["role"] == "discovery" and h["outcome"] == "DUT_FAILURE")
-        after = [h for h in history[trigger_index + 1:] if h["role"] == "discovery"]
+        ids = [h["episodeId"] for h in history]
+        trigger_index = ids.index(cx["originalEpisodeId"])
+        end = ids.index(cxs[1]["originalEpisodeId"]) if len(cxs) > 1 else len(history)
+        after = [h for h in history[trigger_index + 1:end] if h["role"] == "discovery"]
         self.assertTrue(after)
         for h in after:
             c = h["conditions"]

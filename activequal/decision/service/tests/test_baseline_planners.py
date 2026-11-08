@@ -338,5 +338,21 @@ class ManualTests(unittest.TestCase):
             self.manual([self.point(oledRailV=3.25)])
 
 
+
+class CoverageOneAtATimeTests(unittest.TestCase):
+    """The Agent asks for one candidate per call (HLD 06 §11): coverage must still walk every pairwise row."""
+
+    def test_eight_single_calls_cover_all_eight_rows(self):
+        from activequal.decision.service.decision import propose
+        from activequal.model.examples import oled_example_contract
+        contract, history, seen = oled_example_contract(), [], set()
+        for _ in range(8):
+            cond = propose({"contract": contract, "method": "coverage", "seed": 1, "count": 1,
+                            "history": history})["tests"][0]["conditions"]
+            history.append({"conditions": cond, "outcome": "PASS", "robustness": 0.5})
+            seen.add((cond["redLed"], cond["greenLed"], cond["workload"]))
+        self.assertEqual(len(seen), 8)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -192,7 +192,8 @@ class Agent:
             if name in summary.intervals:
                 atoms.append({"control": name, "gte": summary.intervals[name]["low"]})
                 atoms.append({"control": name, "lte": summary.intervals[name]["high"]})
-            elif name in summary.kept or summary.necessity.get(name) == "necessary":
+            elif (name in summary.kept or summary.necessity.get(name) == "necessary"
+                  or (summary.necessity.get(name) == "untested" and summary.minimized[name] != control.nominal)):
                 atoms.append({"control": name, "eq": summary.minimized[name]})
         return {"all": atoms} if atoms else None
 
