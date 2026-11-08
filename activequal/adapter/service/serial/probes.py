@@ -61,7 +61,8 @@ def probe_identity(adapter: SerialBenchAdapter) -> ProbeResult:
                        f"MCU firmware {health.mcu_firmware_sha256}, DUT firmware {health.dut_firmware_sha256}")
 
 
-def probe_limits_rejected(adapter: SerialBenchAdapter, contract_max_mv: int = 3600,
+def probe_limits_rejected(adapter: SerialBenchAdapter, contract_max_mv: int = 3300,   # below the hardware max, so
+                          # firmware that checks only the hardware max fails
                           hardware_max_mv: int = 3600) -> ProbeResult:
     """HLD 02 §18 test 1: the MCU refuses limits above its hardware maximum and setpoints above the limit.
     Nothing is energized: the rejected SET_RAIL never reaches ENABLE_RAIL."""

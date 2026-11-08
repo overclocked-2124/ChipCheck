@@ -168,7 +168,7 @@ class FaultCampaign(unittest.TestCase):
             self.assertEqual(cx["id"], row["id"])
             self.assertEqual(cx["originalEpisodeId"], row["originalEpisodeId"])
             self.assertEqual(cx["origin"], row["origin"])
-            self.assertIn("unknown", cx["originLabel"])
+            self.assertIn("seeded", cx["originLabel"])           # the demo contract declares demoFaultEnabled
             repro = cx["reproduction"]
             self.assertEqual((repro["numerator"], repro["denominator"]), (row["reproductions"], row["attempts"]))
             self.assertEqual(repro["wilson95"], list(stats.wilson_interval(row["reproductions"], row["attempts"])))
