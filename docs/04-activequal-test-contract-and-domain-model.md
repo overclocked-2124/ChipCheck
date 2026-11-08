@@ -264,7 +264,7 @@ Robustness is the minimum margin across applicable requirements, following signa
 
 **Option B — guard-banded verdict (outcome).** With `U` the observation's declared expanded uncertainty (§12.1; about 2σ), a `<=` requirement passes when `x ≤ limit − U`, fails when `x > limit + U`, and is inconclusive in between; other operators apply the same rule to each bound. This follows the guard-banding decision rules used by calibration and test laboratories (ILAC-G8 / ISO/IEC 17025). An inconclusive episode may be replayed under the campaign plan; if it remains inconclusive it is recorded as `INVALID_EXPERIMENT` with an inconclusive reason.
 
-A missing required observation always produces `INVALID_EXPERIMENT`, never a margin. Classification follows the order in HLD 03 §15.1.
+A missing required observation never produces a margin and is never a pass. It produces `INVALID_EXPERIMENT`, unless a present, trustworthy observation violates a requirement beyond its guard band, in which case the outcome is `DUT_FAILURE` and the reason names the missing observation (HLD 03 §15.1 step 3a). Classification follows the order in HLD 03 §15.1.
 
 **ActiveQual decision (2026-11-06):** the research lead proposes each requirement's `nominal` from the DUT's public specification. The hardware and safety lead sets each observation's `uncertainty` as U = 2σ from the fixture's calibration record (HLD 06 §6). Both go through the two-person review for contract changes. Until a calibration exists, the HLD 02 §19.2 planning value (U = 6 ms for OLED latency) is used in the simulator only; `U` must come from calibration of the selected bench before any physical campaign.
 

@@ -413,6 +413,10 @@ The required behavior is:
 7. Researcher inspects the fixture and manually resets the interlock.
 8. Campaign returns to `DRAFT`; it is not automatically re-armed.
 
+### 13.1 Host-side second check of rail read-backs
+
+The test controller enforces rail limits in hardware and is the primary protection. The Controller also checks every rail voltage and current the bench returns for an episode against the contract's `safety.channels` limits, using the shared safety library (`capture_trips`). A reading over its limit turns the episode into a safety abort and locks the campaign out. A voltage trips only when it exceeds `maxV` by more than its read-back uncertainty U (the observation tied to that control by a validity rule), because a reading within U of the limit cannot be told apart from one at the limit; a control may then be requested at exactly `maxV` without noise alone locking the bench out. Currents carry no declared uncertainty and are compared directly. Readings the bench did not take are not judged here; the Oracle treats missing required measurements as invalid (§15.1). Decided 2026-11-08.
+
 **Open decision: resuming after a lockout.** Returning to `DRAFT` discards the campaign's place in its budget, which breaks the research accounting for a campaign that tripped once for a fixture reason.
 
 **Recommended:** keep the safety behavior above (no automatic re-arm, physical review required). After review, allow the researcher to create a *continuation* campaign that links to the locked-out one, inherits its history and remaining budget, and must pass validation and arming again. A continuation is allowed only if the contract, fixture, firmware, and calibration hashes are unchanged; otherwise a new campaign starts. Reports present the two as one campaign with a recorded lockout gap.

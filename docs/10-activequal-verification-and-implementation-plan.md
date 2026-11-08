@@ -19,8 +19,8 @@ This document defines how ActiveQual is built and verified within the 12-week pr
 | Agent | Built: phase plan, replayable verification sessions (confirm, minimize, necessity, bracket) |
 | Controller, Adapter | Built: Controller with spool, simulated bench (profiles B1a/B1b/B1w/B2/B3), serial protocol, MCU emulator and serial host adapter (tested against the emulator only) |
 | Tools | Built: benchmark CLI, full-stack parity check, report and bundle export, demo seeding, calibration fit, bench acceptance probes (HLD 02 §18 tests 1 and 7) |
-| Console | Built and browser-verified on the simulated stack (2026-11-08): contract editor and approval, fixtures and calibration, campaign creation, arm checklist, live campaign, results, export, comparison |
-| CI | GitHub Actions: Python suite, emulator bench self-test, Console typecheck, tests and build |
+| Console | Built. Browser-checked on the simulated stack (2026-11-08): campaign creation, arming checklist with Arm gated on it, live campaign (polling; the SSE route exists but the page does not use it yet), results, export, comparison, fixture and calibration display. Not yet clicked through in a browser: contract editing and approval (the demo was seeded through the API), recording a calibration, clearing a lockout. Missing: manual candidate entry |
+| CI | GitHub Actions workflow written (Python suite, emulator bench self-test, Console typecheck, tests and build); not yet run on GitHub |
 | Test-controller and DUT firmware | Not started (human work) |
 | Hardware | Parts and reviewed limits open (HLD 02 §20); datasheet-based planning estimates in HLD 02 §19.2 |
 

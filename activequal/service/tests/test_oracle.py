@@ -195,3 +195,24 @@ class ClassifyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MissingObservationPrecedenceTests(unittest.TestCase):
+    """HLD 03 §15.1 step 3a: a measured violation stands even when another required reading is missing."""
+
+    def test_missing_reading_with_a_violated_requirement_is_a_dut_failure(self):
+        verdict = classify(CONTRACT, requested(), evidence(oledLatencyMs=None, maxHeartbeatGapMs=900.0))
+        self.assertEqual((verdict.outcome, verdict.violated), (DUT_FAILURE, ("heartbeat",)))
+        self.assertIn("oledLatencyMs is missing", verdict.reason)
+
+    def test_missing_reading_with_everything_else_passing_is_invalid(self):
+        verdict = classify(CONTRACT, requested(), evidence(oledLatencyMs=None))
+        self.assertEqual((verdict.outcome, verdict.reason_code), (INVALID_EXPERIMENT, MISSING_OBSERVATION))
+
+    def test_missing_reading_with_an_inconclusive_one_is_invalid(self):
+        verdict = classify(CONTRACT, requested(), evidence(oledLatencyMs=None, maxHeartbeatGapMs=500.0))
+        self.assertEqual(verdict.outcome, INVALID_EXPERIMENT)
+
+    def test_untrustworthy_reading_does_not_hide_a_violation(self):
+        verdict = classify(CONTRACT, requested(), evidence(oledLatencyMs=float("nan"), resetCount=1.0))
+        self.assertEqual(verdict.outcome, DUT_FAILURE)

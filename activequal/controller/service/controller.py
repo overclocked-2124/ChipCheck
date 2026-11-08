@@ -19,13 +19,12 @@ from typing import Any, Callable
 from activequal.adapter.service.base import BenchAdapter
 from activequal.adapter.service.types import ApprovedEpisode, BenchHealth, Phase, RawBenchCapture
 from activequal.controller.service.client import BackendClient
-from activequal.controller.service.host_check import host_limit_trips
 from activequal.controller.service.spool import Spool
 from activequal.model.canonical import contract_hash as compute_contract_hash
 from activequal.model.contract import ContractModel, parse_contract
 from activequal.model.errors import InvalidRequest
 from activequal.model.evidence import manifest_hash
-from activequal.model.safety import check_candidate
+from activequal.model.safety import capture_trips, check_candidate
 from activequal.service.errors import BackendError
 
 log = logging.getLogger("activequal.controller")
@@ -181,7 +180,7 @@ class Controller:
         if error is not None:
             trip = f"controller error: {error!r}"
         elif capture is not None and not capture.trip and not capture.cutoff_engaged:
-            exceeded = host_limit_trips(model, capture)
+            exceeded = capture_trips(model, capture.measured_rail_v, capture.measured_current_a) if model else ()
             if exceeded:
                 self.adapter.emergency_shutdown()
                 capture = replace(capture, trip="; ".join(exceeded), cutoff_engaged=True,
