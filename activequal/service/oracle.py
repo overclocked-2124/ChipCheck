@@ -52,6 +52,8 @@ class Evidence:
     observations: dict[str, float | None]
     safety_trip: str | None = None
     instrument_errors: tuple[str, ...] = ()
+    timeouts: tuple[str, ...] = ()       # a step timed out: like a missing reading, it cannot undo a measured failure
+    rail_settled: bool = True            # False: the requested conditions were never established
 
 
 @dataclass(frozen=True)
@@ -136,6 +138,8 @@ def classify(contract: ContractModel, requested: dict[str, Any], evidence: Evide
               if obs.required or (obs.required_when is not None and atom_matches(obs.required_when, requested))]
 
     # 2. Were the requested conditions applied and measured within tolerance?
+    if not evidence.rail_settled:
+        return _invalid(CONDITIONS_NOT_APPLIED, "the rail did not settle at the requested value")
     for rule in contract.validity:
         value = evidence.observations.get(rule.metric)
         if not _usable(value):
@@ -150,6 +154,8 @@ def classify(contract: ContractModel, requested: dict[str, Any], evidence: Evide
     #    a requirement that a present, valid observation violates beyond the guard band is still a
     #    DUT failure (HLD 03 §15.1 step 3a), because the missing reading cannot undo it.
     gap: Verdict | None = None
+    if evidence.timeouts:
+        gap = _invalid(INSTRUMENT_ERROR, "timeout: " + "; ".join(evidence.timeouts))
     for obs in needed:
         if obs.name not in evidence.observations or evidence.observations[obs.name] is None:
             gap = gap or _invalid(MISSING_OBSERVATION, f"required observation {obs.name} is missing")

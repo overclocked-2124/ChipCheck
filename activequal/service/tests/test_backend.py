@@ -476,7 +476,7 @@ class ResultTests(Case):
         wrong_rail = w.run_episode(2, {**CANDIDATE, "oledRailV": 3.27}, measured={"measuredOledRailV": 3.20})
         self.assertEqual(wrong_rail["reasonCode"], "CONDITIONS_NOT_APPLIED")
         unsettled = w.run_episode(3, {**CANDIDATE, "oledRailV": 3.28}, settled=False)
-        self.assertEqual(unsettled["reasonCode"], "INSTRUMENT_ERROR")
+        self.assertEqual(unsettled["reasonCode"], "CONDITIONS_NOT_APPLIED")
         missing = w.run_episode(4, {**CANDIDATE, "oledRailV": 3.29}, measured={"oledLatencyMs": None})
         self.assertEqual(missing["reasonCode"], "MISSING_OBSERVATION")
         history = w.backend.episode_history(w.campaign_id)

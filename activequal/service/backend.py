@@ -1090,14 +1090,9 @@ class Backend:
             return self._verdict_view(conn, self._episode(conn, episode["id"]))
 
     def _classify(self, model: ContractModel, result: EpisodeResult) -> oracle.Verdict:
-        errors: list[str] = []
-        if result.instrument_fault:
-            errors.append("instrument fault reported")
-        if not result.rail_settled and not result.safety_trip:
-            errors.append("rail did not settle")
-        errors.extend(f"timeout: {t}" for t in result.timeouts)
+        errors = ("instrument fault reported",) if result.instrument_fault else ()
         evidence = oracle.Evidence({name: m.value for name, m in result.measured.items()}, result.safety_trip,
-                                   tuple(errors))
+                                   errors, tuple(result.timeouts), result.rail_settled or bool(result.safety_trip))
         try:
             return oracle.classify(model, result.requested, evidence)
         except InvalidRequest as exc:

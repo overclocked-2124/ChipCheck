@@ -193,9 +193,6 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(classify(CONTRACT, requested(), ev), classify(CONTRACT, requested(), ev))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class MissingObservationPrecedenceTests(unittest.TestCase):
     """HLD 03 §15.1 step 3a: a measured violation stands even when another required reading is missing."""
@@ -216,3 +213,22 @@ class MissingObservationPrecedenceTests(unittest.TestCase):
     def test_untrustworthy_reading_does_not_hide_a_violation(self):
         verdict = classify(CONTRACT, requested(), evidence(oledLatencyMs=float("nan"), resetCount=1.0))
         self.assertEqual(verdict.outcome, DUT_FAILURE)
+
+
+class TimeoutPrecedenceTests(unittest.TestCase):
+    def test_a_timeout_does_not_hide_a_measured_failure(self):
+        verdict = classify(CONTRACT, requested(), Evidence({**evidence().observations, "resetCount": 1.0},
+                                                           timeouts=("dut command acknowledgement",)))
+        self.assertEqual(verdict.outcome, DUT_FAILURE)
+
+    def test_a_timeout_alone_is_invalid(self):
+        verdict = classify(CONTRACT, requested(), Evidence(evidence().observations, timeouts=("dut ack",)))
+        self.assertEqual((verdict.outcome, verdict.reason_code), (INVALID_EXPERIMENT, INSTRUMENT_ERROR))
+
+    def test_unsettled_rail_means_conditions_not_applied(self):
+        verdict = classify(CONTRACT, requested(), Evidence(evidence().observations, rail_settled=False))
+        self.assertEqual(verdict.reason_code, CONDITIONS_NOT_APPLIED)
+
+
+if __name__ == "__main__":
+    unittest.main()

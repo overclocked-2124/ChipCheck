@@ -60,9 +60,6 @@ class LiveTripTests(unittest.TestCase):
         self.assertTrue(live_trips(None, readings()))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class CaptureTripTests(unittest.TestCase):
     """HLD 03 §13.1: read-backs above the limit trip; within the read-back uncertainty of the limit they do not."""
@@ -78,3 +75,7 @@ class CaptureTripTests(unittest.TestCase):
     def test_non_finite_reading_trips_and_missing_is_not_judged(self):
         self.assertEqual(len(capture_trips(CONTRACT, {"oledRailV": math.nan}, {})), 1)
         self.assertEqual(capture_trips(CONTRACT, {}, {}), ())
+
+
+if __name__ == "__main__":
+    unittest.main()
