@@ -175,7 +175,7 @@ class PlanTests(unittest.TestCase):
         plan = plan_config({"init": {"enabled": True}}, 50, 24)
         self.assertEqual(plan.init_episodes(8), 10)          # 20% of 50
         self.assertEqual(plan.init_episodes(12), 12)         # the array is larger than 20%
-        self.assertEqual(plan.init_episodes(40), 18)         # capped at 35% (17.5 rounds up)
+        self.assertEqual(plan.init_episodes(40), 17)         # capped at 35%: 17.5 rounds down so the cap holds
         self.assertEqual(plan_config("x", 50, 24).init_episodes(8), 0)
 
     def test_invalid_plans_are_rejected(self):

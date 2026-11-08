@@ -19,6 +19,7 @@ Rules it follows (HLD 03 §13, HLD 05 §9.3, §11):
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import statistics
 import threading
@@ -135,6 +136,7 @@ class _Run:
     observations: dict[str, float] = field(default_factory=dict)
     heartbeat_lost: bool = False
     cutoff_engaged: bool = False
+    max_episode_ms: int = 12_000
 
 
 class SerialBenchAdapter:
@@ -173,9 +175,10 @@ class SerialBenchAdapter:
     # ------------------------------------------------------------------------------------ transport
 
     def _next_seq(self) -> int:
-        seq = self._seq
-        self._seq = (self._seq + 1) & 0xFFFF
-        return seq
+        with self._lock:                 # the emergency path draws from the same counter on another thread
+            seq = self._seq
+            self._seq = (self._seq + 1) & 0xFFFF
+            return seq
 
     def _write(self, data: bytes) -> None:
         try:
@@ -320,7 +323,7 @@ class SerialBenchAdapter:
             with self._lock:
                 self._hello()
         except _Fault as fault:
-            health = BenchHealth(ok=False, watchdog_ok=False, instruments_connected=False,
+            health = BenchHealth(ok=False, watchdog_ok=False, instruments_connected=False, outputs_off=False,
                                  detail=(f"test controller unreachable: {fault.detail}",))
             self._last_health = health
             return health
@@ -342,6 +345,7 @@ class SerialBenchAdapter:
         self._locked_known = locked
         health = BenchHealth(
             ok=not locked and estop_released and watchdog_ok and dut and instruments and self._state is m.State.SAFE,
+            outputs_off=self._state is m.State.SAFE or bool(flags & m.Flag.CUTOFF_OPEN),
             watchdog_ok=watchdog_ok, estop_released=estop_released, locked_out=locked, dut_connected=dut,
             instruments_connected=instruments, dut_firmware_sha256=identity.dut_fw_sha256 if identity else None,
             mcu_firmware_sha256=identity.mcu_fw_sha256 if identity else None, detail=tuple(detail))
@@ -426,6 +430,7 @@ class SerialBenchAdapter:
     def _run_episode(self, episode: ApprovedEpisode) -> RawBenchCapture:
         rails = tuple(r for r in self.cfg.rails if r.control in episode.conditions)
         run = _Run(episode, episode_tag(episode.episode_id), self._clock(), rails)
+        run.max_episode_ms = self.cfg.max_episode_ms
         try:
             self._preflight(run)
             self._configure(run)
@@ -474,18 +479,37 @@ class SerialBenchAdapter:
 
     # -- CONFIGURING -------------------------------------------------------------------------------
 
+    def _bind_contract(self, run: _Run) -> None:
+        """Program the contract's limits, slew and the fixture calibration, never the defaults (PRD FR-06)."""
+        episode, bound = run.episode, []
+        for r in run.rails:
+            limits = episode.channel_limits.get(r.name)
+            if limits is None:
+                raise _Fault(CONFIG, f"no approved safety limits for {r.name}; refusing to energize")
+            slew = min(r.slew_v_per_s, episode.slew_v_per_s.get(r.control, r.slew_v_per_s))
+            cal = episode.calibration.get(r.name)
+            if cal is None:
+                raise _Fault(CONFIG, f"no calibration for {r.name}; refusing to energize")
+            bound.append(dataclasses.replace(r, max_v=float(limits["maxV"]), max_a=float(limits["maxA"]),
+                                             slew_v_per_s=slew, hw_slew_v_per_s=slew,
+                                             gain=float(cal["gain"]), offset=float(cal["offset"])))
+        run.rails = tuple(bound)
+        if episode.max_episode_s:
+            run.max_episode_ms = min(self.cfg.max_episode_ms, int(episode.max_episode_s * 1000) + 500)
+
     def _configure(self, run: _Run) -> None:
         episode = run.episode
         self._enter(run, Phase.CONFIGURING, "protection limits and capture programmed")
         if not run.rails:
             raise _Fault(CONFIG, "the episode controls no programmable rail")
+        self._bind_contract(run)
         limits = tuple(m.ChannelLimit(r.channel, round(r.max_v * 1000), round(r.max_a * 1e6),
                                       round(r.hw_slew_v_per_s * 1000)) for r in run.rails)
         self._limits_echo = None
-        self._command(m.SetLimits(self.cfg.max_episode_ms, limits), tag=run.tag)
+        self._command(m.SetLimits(run.max_episode_ms, limits), tag=run.tag)
         self._spin_quiet(lambda: self._limits_echo is not None, self.cfg.ack_timeout_s)
         echo = self._limits_echo
-        if echo is None or echo.limits != limits or echo.max_episode_ms != self.cfg.max_episode_ms:
+        if echo is None or echo.limits != limits or echo.max_episode_ms != run.max_episode_ms:
             raise _Fault(CONFIG, f"SET_LIMITS read-back mismatch: sent {limits}, read back "
                                  f"{None if echo is None else echo.limits}")
         workload = episode.conditions.get("workload", "idle")

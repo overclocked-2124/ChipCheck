@@ -74,7 +74,7 @@ class Agent:
             used_before += summary.episodes_used
             self.summaries.append(summary)
             if summary.confirmed:
-                self._record(trigger["episodeId"], summary)
+                self._record(trigger["episodeId"], summary, model)
                 rule = self._region_rule(model, summary)
                 if rule is not None:
                     excluded.append(rule)
@@ -170,13 +170,15 @@ class Agent:
             repeat_reason=request.reason)
         return StepResult("submitted", request.reason, result)
 
-    def _record(self, trigger_id: str, summary: SessionSummary) -> None:
+    def _record(self, trigger_id: str, summary: SessionSummary, model: ContractModel) -> None:
         self.backend.record_counterexample(
             self.campaign_id, trigger_id,
             {"conditions": summary.minimized, "removed": summary.removed, "kept": summary.kept,
              "necessity": summary.necessity},
             {"intervals": summary.intervals, "budgetExhausted": summary.budget_exhausted},
-            summary.reproductions, summary.replays)
+            summary.reproductions, summary.replays,
+            # PRD §17.1/§19.3: a fault the demo firmware was built to contain is labelled seeded ground truth.
+            "seeded" if model.setup.get("demoFaultEnabled") is True else "unknown")
 
     @staticmethod
     def _region_rule(model: ContractModel, summary: SessionSummary) -> dict[str, Any] | None:
@@ -192,7 +194,8 @@ class Agent:
             if name in summary.intervals:
                 atoms.append({"control": name, "gte": summary.intervals[name]["low"]})
                 atoms.append({"control": name, "lte": summary.intervals[name]["high"]})
-            elif name in summary.kept or summary.necessity.get(name) == "necessary":
+            elif (name in summary.kept or summary.necessity.get(name) == "necessary"
+                  or (summary.necessity.get(name) == "untested" and summary.minimized[name] != control.nominal)):
                 atoms.append({"control": name, "eq": summary.minimized[name]})
         return {"all": atoms} if atoms else None
 

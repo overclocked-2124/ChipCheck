@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { use, useState } from "react";
 import { useLoad, useNow } from "@/components/api";
+import { ArmChecklist, ClearLockout } from "@/components/campaign-controls";
+import { useCampaignEvents } from "@/components/use-events";
 import { Empty, ErrorBox, KeyValues, Loading, Notice, Section, StateBadge, ActionButton } from "@/components/ui";
 import { allowedActions, STATE_MEANING, type CampaignAction } from "@/lib/actions";
 import { activeEpisode, ageSeconds, benchStatus, formatAge, lockoutInfo, stopExplanation } from "@/lib/live";
@@ -11,25 +13,28 @@ import type { ApiResult, CampaignEvent, CampaignView, FixtureView, UiError } fro
 export default function CampaignPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const campaign = useLoad<CampaignView>(`/v1/campaigns/${encodeURIComponent(id)}`, 2000);
-  const events = useLoad<{ events: CampaignEvent[] }>(`/v1/campaigns/${encodeURIComponent(id)}/events`, 2000);
+  const events = useCampaignEvents(id);
   const fixtureId = campaign.data?.fixtureId ?? null;
   const fixture = useLoad<FixtureView>(fixtureId ? `/v1/fixtures/${encodeURIComponent(fixtureId)}` : null, 3000);
   const now = useNow();
   const [actionError, setActionError] = useState<UiError | null>(null);
   const [reasons, setReasons] = useState<{ code: string; message: string }[]>([]);
+  const [serverReasons, setServerReasons] = useState<{ code: string; message: string }[] | null>(null);
 
   const c = campaign.data;
   if (campaign.loading) return <Loading what="campaign" />;
   if (!c) return <ErrorBox error={campaign.error} title="Could not load the campaign" />;
-  const log = events.data?.events ?? [];
+  const log = events.events;
   const current = activeEpisode(log);
   const stop = stopExplanation(c.state, log);
   const lock = lockoutInfo(c.state, log);
 
   function done(action: CampaignAction, result: ApiResult<unknown>) {
     setActionError(null); setReasons([]);
-    if (result.ok) { if (action === "validate") setReasons((result.data as CampaignView).reasons ?? []); void campaign.reload(); void events.reload(); }
-    else { setActionError(result.error); setReasons(result.error.reasons ?? []); }
+    if (result.ok) {
+      if (action === "validate") { const r = (result.data as CampaignView).reasons ?? []; setReasons(r); setServerReasons(r); }
+      void campaign.reload(); void events.reload();
+    } else { setActionError(result.error); setReasons(result.error.reasons ?? []); if (action === "arm") setServerReasons(result.error.reasons ?? []); }
   }
 
   return (
@@ -37,16 +42,20 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       <div className="row"><h1>Campaign <code>{c.id.slice(0, 12)}</code></h1><StateBadge state={c.state} /></div>
       <p className="hint">{STATE_MEANING[c.state]}</p>
       <ErrorBox error={campaign.error} title="Showing the last known state" />
+      <ErrorBox error={events.error} title="Event log not current: episode and stop details below may be stale" />
+      <ErrorBox error={fixture.error} title="Bench status not current" />
       {c.agentError ? <Notice tone="bad">Agent stopped: {c.agentError}</Notice> : null}
       <Section title="Actions">
         <div className="row">
-          {allowedActions(c.state).filter(a => !a.reviewer).map(a =>
+          {allowedActions(c.state).filter(a => !a.reviewer && !a.checklistOnly).map(a =>
             <ActionButton key={a.action} action={a.action} campaignId={c.id} version={c.version} onResult={done} />)}
           <Link className="button secondary" href={`/campaigns/${c.id}/results`}>Results</Link>
         </div>
         <ErrorBox error={actionError} title="Action refused" />
         {reasons.length ? <Notice tone="warn"><ul>{reasons.map((r, i) => <li key={i}><code>{r.code}</code> {r.message}</li>)}</ul></Notice> : null}
       </Section>
+      {c.state === "READY" ? <ArmChecklist campaign={c} fixture={fixture.data} serverReasons={serverReasons} onResult={done} /> : null}
+      {c.state === "LOCKED_OUT" ? <ClearLockout campaign={c} onDone={r => done("clear-lockout", r)} /> : null}
       <Section title="Progress">
         <KeyValues rows={[
           ["Planner", `${c.planner.method} (seed ${c.seed})`],
@@ -68,9 +77,9 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       </Section>
       {stop ? <Notice tone="info"><strong>{stop.headline}</strong> <code>{stop.reasonCode}</code> {stop.reason} ({stop.actor})</Notice> : null}
       {lock ? (
-        <Notice tone="bad"><strong>Locked out: {lock.cause}</strong>
+        <Notice tone="bad"><strong id="lockout">Locked out: {lock.cause}</strong>
           <ul>{lock.checklist.map(item => <li key={item}>{item}</li>)}</ul>
-          <p>Clearing a lockout needs a reviewer and is done from the fixture page.</p>
+          <p>Clearing the lockout needs a reviewer; see below.</p>
         </Notice>
       ) : null}
       <Section title="Bench">

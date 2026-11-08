@@ -45,6 +45,12 @@ class ApprovedEpisode:
     conditions: dict[str, Any]
     duration_ms: int            # dwell / observation window
     seed: int                   # per-episode seed; same seed + attempt gives the same noise draw
+    # From the approved contract and the fixture's calibration (PRD FR-06: the bench programs these limits
+    # before enabling output). Empty means "not supplied"; a real bench refuses to energize then.
+    channel_limits: dict[str, dict[str, float]] = field(default_factory=dict)   # target -> {"maxV", "maxA"}
+    slew_v_per_s: dict[str, float] = field(default_factory=dict)                 # control -> slewPerSMax
+    calibration: dict[str, dict[str, float]] = field(default_factory=dict)       # target -> {"gain", "offset"}
+    max_episode_s: float | None = None
 
 
 class BenchEvent(NamedTuple):
@@ -89,6 +95,7 @@ class BenchHealth:
     locked_out: bool = False
     dut_connected: bool = True
     instruments_connected: bool = True
+    outputs_off: bool = True                    # every programmable output is in its shutdown state
     dut_firmware_sha256: str | None = None      # identities read back from the DUT and the test controller
     mcu_firmware_sha256: str | None = None
     detail: tuple[str, ...] = field(default_factory=tuple)

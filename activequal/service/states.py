@@ -75,7 +75,7 @@ CAMPAIGN_TRANSITIONS: Mapping[CampaignState, frozenset[CampaignState]] = {
     C.ARMED: frozenset({C.RUNNING, C.ABORTING, C.LOCKED_OUT}),
     C.RUNNING: frozenset({C.PAUSING, C.COMPLETED, C.ABORTING, C.LOCKED_OUT}),
     C.PAUSING: frozenset({C.PAUSED, C.ABORTING, C.LOCKED_OUT}),
-    C.PAUSED: frozenset({C.RUNNING, C.ABORTING}),
+    C.PAUSED: frozenset({C.RUNNING, C.ABORTING, C.LOCKED_OUT}),   # a trip while paused still locks out
     C.ABORTING: frozenset({C.ABORTED, C.LOCKED_OUT}),
     C.LOCKED_OUT: frozenset({C.DRAFT}),
     C.COMPLETED: frozenset(),

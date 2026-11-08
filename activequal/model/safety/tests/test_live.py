@@ -4,7 +4,7 @@ import unittest
 
 from activequal.model.contract import parse_contract
 from activequal.model.examples import oled_example_contract
-from activequal.model.safety import LiveReadings, live_trips
+from activequal.model.safety import LiveReadings, capture_trips, live_trips
 
 CONTRACT = parse_contract(oled_example_contract(), require_oracle=True)
 
@@ -58,6 +58,23 @@ class LiveTripTests(unittest.TestCase):
         self.assertTrue(live_trips(CONTRACT, None))
         self.assertTrue(live_trips(CONTRACT, LiveReadings(volts=None, amps=None, temp_c=30.0, elapsed_s=1.0)))
         self.assertTrue(live_trips(None, readings()))
+
+
+
+class CaptureTripTests(unittest.TestCase):
+    """HLD 03 §13.1: read-backs above the limit trip; within the read-back uncertainty of the limit they do not."""
+
+    def test_nominal_and_at_limit_readings_pass(self):
+        self.assertEqual(capture_trips(CONTRACT, {"oledRailV": 3.3}, {"oledRailA": 0.05}), ())
+        self.assertEqual(capture_trips(CONTRACT, {"oledRailV": 3.608}, {"oledRailA": 0.2}), ())   # U = 0.01 V
+
+    def test_over_limit_readings_trip(self):
+        self.assertIn("voltage on supply.ch2", capture_trips(CONTRACT, {"oledRailV": 3.62}, {})[0])
+        self.assertIn("current on supply.ch3", capture_trips(CONTRACT, {}, {"sensorRailA": 0.21})[0])
+
+    def test_non_finite_reading_trips_and_missing_is_not_judged(self):
+        self.assertEqual(len(capture_trips(CONTRACT, {"oledRailV": math.nan}, {})), 1)
+        self.assertEqual(capture_trips(CONTRACT, {}, {}), ())
 
 
 if __name__ == "__main__":

@@ -130,3 +130,10 @@ class CliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CensoredMedianTests(unittest.TestCase):
+    def test_misses_count_as_above_every_find(self):
+        from activequal.tools.benchmark import summarize
+        self.assertEqual(summarize([1, 2, 3, 4, 5, 6, None, None, None, None], 30, (30,))["medianEpisodesToFirstFailure"], 5.5)
+        self.assertIsNone(summarize([1, None, None], 30, (30,))["medianEpisodesToFirstFailure"])

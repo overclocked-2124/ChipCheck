@@ -46,12 +46,16 @@ export function resultStatement(campaign: CampaignView, counterexamples: Counter
     const label = c.origin === "seeded" ? " (seeded fault)" : c.origin === "natural" ? " (natural fault)" : "";
     return { kind: "counterexample", text: `Counterexample found${label}: a requirement failed at measured conditions; ${reproductionText(c)}.` };
   }
-  if (campaign.state === "LOCKED_OUT" || (abort > 0 && campaign.state !== "RUNNING")) {
+  if (campaign.state === "LOCKED_OUT") {
     return { kind: "safety", text: `Safety abort: ${abort} episode(s) ended by a safety trip; no further adaptive exploration was performed after it.` };
   }
+  const failures = by.DUT_FAILURE ?? 0;
   if (campaign.state === "COMPLETED" || campaign.state === "ABORTED") {
-    if (total > 0 && invalid / total >= 0.25) return { kind: "inconclusive", text: `Campaign inconclusive: ${invalid}/${total} episodes invalid.` };
-    return { kind: "none", text: `No counterexample found within budget: ${valid} valid episode(s) of ${total} run. This says nothing about conditions that were not tested.` };
+    if (failures > 0) return { kind: "inconclusive", text: `Failure observed but not confirmed: ${failures} episode(s) failed, but no failure reproduced on replay.` };
+    if (valid === 0 || (total > 0 && invalid / total >= 0.25)) return { kind: "inconclusive", text: `Campaign inconclusive: ${invalid}/${total} episodes invalid.` };
+    const scope = campaign.state === "ABORTED" ? "before the campaign was aborted" : "within budget";
+    const aborts = abort > 0 ? ` ${abort} episode(s) ended in a safety abort.` : "";
+    return { kind: "none", text: `No counterexample found ${scope}: ${valid} valid episode(s) of ${total} run.${aborts} This says nothing about conditions that were not tested.` };
   }
   return { kind: "running", text: `Campaign is ${campaign.state}: ${total} episode(s) finished so far; no verdict on the campaign yet.` };
 }

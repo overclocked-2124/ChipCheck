@@ -194,12 +194,9 @@ class ContractTests(unittest.TestCase):
 
 
 def _gp_available():
-    try:
-        import optuna
-        optuna.samplers.GPSampler(seed=0)
-        return True
-    except ImportError:
-        return False
+    # GPSampler imports torch lazily, so constructing it proves nothing; look for the packages instead.
+    import importlib.util
+    return all(importlib.util.find_spec(name) is not None for name in ("torch", "scipy"))
 
 
 class GPPlannerTests(unittest.TestCase):

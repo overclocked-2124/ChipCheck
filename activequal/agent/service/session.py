@@ -141,8 +141,10 @@ def verification_session(model: ContractModel, trigger: dict[str, Any], plan: Pl
         if outcome == FAIL:
             current = candidate
             summary.removed.append(name)
-        else:
+        elif outcome == PASS:
             summary.kept.append(name)
+        else:                       # invalid or refused: says nothing about the failure, so do not claim it is needed
+            summary.necessity[name] = "untested"
     summary.minimized = dict(current)
 
     # 3. A control already at nominal in the original failure cannot be shown necessary by minimizing: flip it once.
@@ -166,7 +168,13 @@ def verification_session(model: ContractModel, trigger: dict[str, Any], plan: Pl
     #    passing means bisect between the failing nominal and that end.
     numeric = [n for n, c in controls.items() if not _is_discrete(c)]
     plan_order = [(n, False) for n in summary.kept if n in numeric]
+    plan_order += [(n, False) for n in numeric if summary.necessity.get(n) == "untested" and current[n] != controls[n].nominal]
     plan_order += [(n, True) for n in summary.removed if n in numeric and trigger[n] != controls[n].nominal]
+    # A numeric control the failure was found at nominal (e.g. 3.30 V, inside the PRD §17.2 window) also bounds the
+    # region; ends first, so an irrelevant control costs two episodes (HLD 04 §14 "bracket each remaining control").
+    planned = {n for n, _ in plan_order}
+    plan_order += [(n, True) for n in numeric if n not in planned and trigger[n] == controls[n].nominal
+                   and current[n] == controls[n].nominal]
     for name, end_first in plan_order:
         interval = yield from bracket(model, current, name, run, end_first=end_first)
         summary.intervals[name] = interval

@@ -11,7 +11,8 @@ from typing import Any
 
 _OLED_EXAMPLE: dict[str, Any] = {
     "contractVersion": 2,
-    "setup": {"dut": "esp32s3-oled-demo", "firmwareSha256": "0" * 64, "fixture": "bench-A", "fixtureRev": "A"},
+    "setup": {"dut": "esp32s3-oled-demo", "firmwareSha256": "0" * 64, "fixture": "bench-A", "fixtureRev": "A",
+              "demoFaultEnabled": True},   # PRD §17: DEMO_FAULT_ENABLED firmware; labels ground truth, never read by Decision
     "controls": {
         "oledRailV": {"type": "continuous", "unit": "V", "min": 3.00, "max": 3.60, "step": 0.01, "nominal": 3.30,
                       "shutdown": 0.0, "slewPerSMax": 0.5, "bind": {"target": "supply.ch2", "action": "setVoltage"}},

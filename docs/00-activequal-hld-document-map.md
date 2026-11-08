@@ -52,7 +52,7 @@ Moving a file into the main Documents folder means it is accepted as the current
 | 02 | Hardware Architecture | How are the DUT, power rails, test controller, measurements, signal protection, and physical safety mechanisms connected? | Approved; 2026-11-05 part research and 2026-11-06 planning estimates in review |
 | 03 | Episode Execution and Safety State Machine | How does a campaign and one physical experiment move from proposal through safety validation, execution, shutdown, classification, and recovery? | Initial draft |
 | 04 | Test Contract and Domain Model | How does a DUT declare variables, legal ranges, constraints, workloads, observations, failure rules, budgets, and compatible fixtures? | Initial draft |
-| 05 | APIs and Instrumentation Protocols | What RPCs and device messages connect the Console, BFF, Backend, Agent, Controller, Adapter, test controller, and DUT? | Initial draft |
+| 05 | APIs and Instrumentation Protocols | What RPCs and device messages connect the Console (and its server routes), Backend, Agent, Controller, Adapter, test controller, and DUT? | Initial draft |
 | 06 | Adaptive Search and Research Evaluation | How are experiments selected, how do baselines and adaptive methods share one interface, and how will performance be compared fairly? | Initial draft |
 | 07 | Security and Deployment | How are users and machine processes authenticated, how are services deployed, and how are credentials and network boundaries protected? | Initial draft |
 | 08 | Persistence, Telemetry, and Observability | Which database entities, events, measurements, traces, logs, and metrics are stored, and how are they queried and retained? | Initial draft |
@@ -67,7 +67,7 @@ Contains:
 
 - project purpose, MVP scope, stretch scope, and non-goals;
 - human actors and external systems;
-- Console, BFF, Backend, Agent, Controller, and Adapter Service boundaries;
+- Console (with its server routes, no separate BFF), Backend, Agent, Controller, and Adapter Service boundaries;
 - control-plane and bench-plane separation;
 - high-level authority and trust boundaries;
 - local MVP deployment shape;
@@ -147,8 +147,7 @@ Will contain:
 
 Will contain:
 
-- Console-to-BFF RPCs;
-- BFF-to-Backend RPCs;
+- Console server routes to control-plane HTTP API;
 - Agent proposal interface;
 - Controller claim, lease, heartbeat, and result-submission RPCs;
 - Adapter capability and operation interfaces;
@@ -311,7 +310,7 @@ Use these terms consistently:
 | Candidate | Agent Service proposal before safety approval |
 | Episode | One durable reset-to-reset physical experiment |
 | Outcome | `PASS`, `DUT_FAILURE`, `INVALID_EXPERIMENT`, or `SAFETY_ABORT` |
-| Agent Service | Selects proposed experiments and schedules minimization |
+| Agent Service | Runs the campaign loop: asks Decision for candidates, submits them, runs verification sessions (Decision selects the experiments) |
 | Controller Service | Owns the local physical episode state machine |
 | Adapter Service | Translates generic operations into instrument-specific commands |
 | Test-controller MCU | Executes deterministic timing and maintains watchdog liveness |

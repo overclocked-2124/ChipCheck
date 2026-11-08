@@ -49,7 +49,7 @@ class SimulatedStack:
         b.approve_contract(self.contract_key, 1, DANA)
         b.approve_contract(self.contract_key, 1, ALEX)
         self.token = b.register_fixture("bench-A", "A", CAPABILITIES, DANA, approved_mcu_firmware_sha256=MCU_FIRMWARE)["token"]
-        b.record_calibration("bench-A", {"supply.ch2": {"gain": 1.0, "offset": 0.0, "uncertainty": 0.005}},
+        b.record_calibration("bench-A", {ch: {"gain": 1.0, "offset": 0.0, "uncertainty": 0.005} for ch in ("supply.ch2", "supply.ch3")},
                              "simulated meter", "sim", START + timedelta(days=365), SAM)
         self.adapter = SimulatedBenchAdapter(profile, noise_seed=noise_seed, latency_sigma_ms=sigma_ms, fault=fault,
                                              dut_firmware_sha256=DUT_FIRMWARE, mcu_firmware_sha256=MCU_FIRMWARE)

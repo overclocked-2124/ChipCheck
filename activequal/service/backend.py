@@ -10,13 +10,14 @@ decision 13).
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
 import secrets
 import sqlite3
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable
@@ -81,10 +82,19 @@ def _sha256(text: str | bytes) -> str:
 
 
 def _limits_signature(model: ContractModel) -> str:
-    """What a reviewer must re-approve: safety limits and every control's range, slew and binding."""
+    """What two reviewers must approve (PRD §28.1): safety limits, every control's range, slew and binding,
+    and everything that decides a verdict (requirements, observation uncertainties, validity tolerances),
+    since a wider guard band can turn a real failure into "inconclusive"."""
     controls = {name: (c.kind, c.minimum, c.maximum, c.step, c.shutdown, c.slew_per_s_max, c.bind, c.unit)
                 for name, c in model.controls.items()}
-    return _json({"controls": controls, "forbidden": model.forbidden, "safety": repr(model.safety)})
+    plain = lambda value: json.loads(json.dumps(value, default=lambda o: dataclasses.asdict(o)))   # noqa: E731
+    return _json({"controls": controls, "forbidden": model.forbidden, "safety": plain(model.safety),
+                  "observations": plain(model.observations), "requirements": plain(model.requirements),
+                  "validity": plain(model.validity)})   # _json sorts keys, so stored and fresh parses compare equal
+
+
+# Campaign states a safety event moves to LOCKED_OUT (HLD 03 §13: every trip leads to lockout).
+LOCKABLE = (C.ARMED, C.RUNNING, C.PAUSING, C.PAUSED, C.ABORTING)
 
 
 class Backend:
@@ -164,8 +174,10 @@ class Backend:
             else:
                 version, previous = last["version"] + 1, last
             # Two people must approve a first version or any change to limits (PRD §28.1, HLD 07 §7).
+            # The comparison is against the newest *approved* version: an unapproved draft never lowers the bar.
             required = 2
-            if previous is not None and _limits_signature(self._model(conn, previous["id"])) == _limits_signature(model):
+            approved = self._latest_approved(conn, contract_key) if previous is not None else None
+            if approved is not None and _limits_signature(self._model(conn, approved["id"])) == _limits_signature(model):
                 required = 1
             row_id = new_id()
             conn.execute(
@@ -185,6 +197,21 @@ class Backend:
         return {"id": row["id"], "contractId": row["contract_key"], "version": row["version"],
                 "contractHash": row["contract_hash"], "approvalsRequired": row["approvals_required"],
                 "approvedBy": approvers, "approved": len(approvers) >= row["approvals_required"]}
+
+    @staticmethod
+    def _calibration_channels(conn: sqlite3.Connection, fixture: sqlite3.Row) -> dict[str, Any]:
+        if not fixture["current_calibration_id"]:
+            return {}
+        row = conn.execute("SELECT channels_json FROM calibrations WHERE id = ?",
+                           (fixture["current_calibration_id"],)).fetchone()
+        return json.loads(row["channels_json"]) if row else {}
+
+    def _latest_approved(self, conn: sqlite3.Connection, contract_key: str) -> sqlite3.Row | None:
+        for row in conn.execute("SELECT * FROM contract_versions WHERE contract_key = ? ORDER BY version DESC",
+                                (contract_key,)).fetchall():
+            if self._contract_summary(conn, row)["approved"]:
+                return row
+        return None
 
     def _contract_row(self, conn: sqlite3.Connection, contract_key: str, version: int) -> sqlite3.Row:
         row = conn.execute("SELECT * FROM contract_versions WHERE contract_key = ? AND version = ?",
@@ -300,8 +327,8 @@ class Backend:
                          (_json(health), self._ts(), fixture_id))
             if health["tripActive"] or not health["estopReleased"]:
                 campaign = conn.execute(
-                    "SELECT * FROM campaigns WHERE fixture_id = ? AND state IN (?,?,?,?)",
-                    (fixture_id, C.ARMED, C.RUNNING, C.PAUSING, C.ABORTING)).fetchone()
+                    f"SELECT * FROM campaigns WHERE fixture_id = ? AND state IN ({','.join('?' * len(LOCKABLE))})",
+                    (fixture_id, *LOCKABLE)).fetchone()
                 if campaign is not None:
                     reason = "trip reported by the bench" if health["tripActive"] else "E-stop pressed"
                     self._lockout(conn, campaign, reason_code="BENCH_REPORTED_TRIP", reason=reason, actor=SYSTEM_ACTOR)
@@ -324,6 +351,13 @@ class Backend:
             add("CALIBRATION_EXPIRED", "the fixture's calibration has expired")
         elif tuple_ is not None and tuple_.get("calibrationId") != cal["id"]:
             add("CALIBRATION_CHANGED", "the calibration changed since arming")
+        if cal is not None and model.safety is not None:
+            # PRD §9.3: a control with no calibrated read-back cannot be a continuous research variable.
+            bound = {c.bind[0] for c in model.controls.values()
+                     if c.bind and c.minimum is not None and c.bind[0] in model.safety.channels}
+            uncovered = sorted(bound - set(json.loads(cal["channels_json"])))
+            if uncovered:
+                add("CALIBRATION_INCOMPLETE", "no calibration for " + ", ".join(uncovered))
         if not fixture["health_json"] or not fixture["health_at"]:
             add("BENCH_HEALTH_UNKNOWN", "the bench has not reported its health")
             return reasons
@@ -340,10 +374,14 @@ class Backend:
         if health["tripActive"]:
             add("TRIP_ACTIVE", "an unresolved trip is active")
         expected_dut = model.setup.get("firmwareSha256")
-        if expected_dut and health.get("dutFirmwareSha256") != expected_dut:
+        if not expected_dut:
+            add("DUT_FIRMWARE_UNSPECIFIED", "the contract does not name the DUT firmware (setup.firmwareSha256)")
+        elif health.get("dutFirmwareSha256") != expected_dut:
             add("DUT_FIRMWARE_MISMATCH", "the DUT firmware does not match the contract")
         approved_mcu = fixture["approved_mcu_firmware_sha256"]
-        if approved_mcu and health.get("mcuFirmwareSha256") != approved_mcu:
+        if not approved_mcu:
+            add("MCU_FIRMWARE_UNAPPROVED", "the fixture has no approved test-controller firmware hash")
+        elif health.get("mcuFirmwareSha256") != approved_mcu:
             add("MCU_FIRMWARE_MISMATCH", "the test-controller firmware is not the approved one")
         if tuple_ is not None:
             for key, code in (("dutFirmwareSha256", "DUT_FIRMWARE_CHANGED"), ("mcuFirmwareSha256", "MCU_FIRMWARE_CHANGED")):
@@ -480,6 +518,9 @@ class Backend:
         if not summary["approved"]:
             add("CONTRACT_NOT_APPROVED", f"contract has {len(summary['approvedBy'])} of "
                                          f"{summary['approvalsRequired']} required approvals")
+        for key, code in (("fixture", "FIXTURE_UNSPECIFIED"), ("fixtureRev", "FIXTURE_REVISION_UNSPECIFIED")):
+            if not raw_setup.get(key):   # PRD §9.3: identity must be checked, so it must be stated
+                add(code, f"the contract does not name setup.{key}, so the setup cannot be checked")
         if raw_setup.get("fixture") not in (None, fixture["id"]):
             add("FIXTURE_ID_MISMATCH", f"the contract is for fixture {raw_setup.get('fixture')}, not {fixture['id']}")
         if raw_setup.get("fixtureRev") not in (None, fixture["revision"]):
@@ -830,6 +871,7 @@ class Backend:
                     "contractHash": episode["contract_hash"], "fixtureId": fixture_id,
                     "contract": json.loads(contract_json),
                     "fixtureCapabilities": json.loads(fixture["capabilities_json"]),
+                    "calibration": self._calibration_channels(conn, fixture),
                     "requested": json.loads(episode["requested_json"]),
                     "role": episode["role"], "leaseExpiresAt": isoformat(now + timedelta(seconds=self.lease_ttl_s)),
                     "maxEpisodeS": model.safety.max_episode_s,
@@ -887,7 +929,11 @@ class Backend:
                             campaign_id=episode["campaign_id"], attempt=lease["attempt"], actor=SYSTEM_ACTOR,
                             reason_code="ABORT_ACKNOWLEDGED", reason="bench confirmed shutdown",
                             contract_hash=lease["contract_hash"], fixture_id=fixture_id, detail={"leaseId": lease_id})
-            campaign = self._settle(conn, self._campaign(conn, episode["campaign_id"]))
+            campaign = self._campaign(conn, episode["campaign_id"])
+            if E(episode["state"]) is E.LOCKOUT and C(campaign["state"]) in LOCKABLE:   # the abort ended in a trip
+                campaign = self._lockout(conn, campaign, reason_code="SAFETY_TRIP", actor=SYSTEM_ACTOR,
+                                         reason="the bench reached cutoff while aborting")
+            campaign = self._settle(conn, campaign)
             return {"campaignState": campaign["state"]}
 
     def reconcile_lease(self, lease_id: str, resolution: str, note: str, actor: Actor) -> dict[str, Any]:
@@ -907,24 +953,37 @@ class Backend:
             conn.execute("UPDATE leases SET state = 'RELEASED' WHERE id = ?", (lease_id,))
             campaign = self._campaign(conn, episode["campaign_id"])
             # Route the episode to a finished state through its legal transitions, then record an INVALID verdict.
-            self._finish_without_evidence(conn, episode, campaign, actor, f"{resolution}: {note.strip()}")
-            if C(self._campaign(conn, campaign["id"])["state"]) in (C.RUNNING, C.PAUSING, C.ABORTING):
+            outcome = self._finish_without_evidence(conn, episode, campaign, actor, f"{resolution}: {note.strip()}")
+            if C(self._campaign(conn, campaign["id"])["state"]) in LOCKABLE:
                 self._lockout(conn, campaign, reason_code="LEASE_LOST",
                               reason="a lease expired; the fixture must be inspected", actor=SYSTEM_ACTOR)
-            return {"episodeId": episode["id"], "outcome": oracle.INVALID_EXPERIMENT}
+            return {"episodeId": episode["id"], "outcome": outcome}
 
     def _finish_without_evidence(self, conn: sqlite3.Connection, episode: sqlite3.Row, campaign: sqlite3.Row,
-                                 actor: Actor, reason: str) -> None:
+                                 actor: Actor, reason: str) -> str:
+        """Finalize an episode whose evidence will never arrive. One that reached cutoff is a safety abort
+        (HLD 03 §15.1 step 1); anything else is an invalid experiment. Returns the outcome."""
         state = E(episode["state"])
-        path = [E.EMERGENCY_CUTOFF, E.LOCKOUT, E.FINALIZED] if state in (
-            E.PREFLIGHT, E.CONFIGURING, E.SETTLING, E.EXECUTING, E.OBSERVING, E.SHUTTING_DOWN) else \
-            [E.PREFLIGHT, E.SHUTTING_DOWN, E.SUBMITTING, E.FINALIZED] if state is E.LEASED else []
+        safety = state in (E.EMERGENCY_CUTOFF, E.LOCKOUT)
+        if state in (E.PREFLIGHT, E.CONFIGURING, E.SETTLING, E.EXECUTING, E.OBSERVING, E.SHUTTING_DOWN):
+            path = [E.EMERGENCY_CUTOFF, E.LOCKOUT, E.FINALIZED]       # physical state unknown: treat as cut off
+        elif state is E.LEASED:
+            path = [E.PREFLIGHT, E.SHUTTING_DOWN, E.SUBMITTING, E.FINALIZED]
+        elif state is E.EMERGENCY_CUTOFF:
+            path = [E.LOCKOUT, E.FINALIZED]
+        elif state in (E.LOCKOUT, E.SUBMITTING, E.EVIDENCE_PENDING):
+            path = [E.FINALIZED]
+        else:
+            path = []
+        outcome = oracle.SAFETY_ABORT if safety else oracle.INVALID_EXPERIMENT
+        code = "SAFETY_TRIP" if safety else "LEASE_RECONCILED"
         for step in path:
             episode = self._episode(conn, episode["id"])
-            extra = {"outcome": oracle.INVALID_EXPERIMENT, "finalized_at": self._ts()} if step is E.FINALIZED else None
+            extra = {"outcome": outcome, "finalized_at": self._ts()} if step is E.FINALIZED else None
             self._move_episode(conn, episode, step, actor=actor, reason_code="RECONCILED", reason=reason, extra=extra)
         conn.execute("INSERT OR REPLACE INTO verdicts VALUES (?,?,?,?,?,?,?,?)",
-                     (episode["id"], oracle.INVALID_EXPERIMENT, "LEASE_RECONCILED", reason, "{}", None, "{}", self._ts()))
+                     (episode["id"], outcome, code, reason, "{}", None, "{}", self._ts()))
+        return outcome
 
     # ------------------------------------------------------------------ traces
 
@@ -994,6 +1053,9 @@ class Backend:
             if canonical_json(result.requested) != canonical_json(json.loads(episode["requested_json"])):
                 raise BackendError("INTEGRITY_ERROR", "requested conditions differ from the approved episode")
             state = E(episode["state"])
+            if not result.safety_trip and state in (E.EMERGENCY_CUTOFF, E.LOCKOUT):
+                # The bench reached cutoff but named no trip: still a safety abort, never a pass (HLD 03 §15.1 step 1).
+                result = replace(result, safety_trip=f"cutoff reached without a reported trip ({state.value})")
             if result.safety_trip:
                 if state not in (E.EMERGENCY_CUTOFF, E.LOCKOUT):
                     raise precondition("a safety trip is reported but the episode never reached cutoff", state=state.value)
@@ -1018,6 +1080,10 @@ class Backend:
             for trace in result.traces:
                 conn.execute("UPDATE traces SET episode_id = ? WHERE sha256 = ? AND episode_id IS NULL",
                              (episode["id"], trace["sha256"]))
+            if state is E.EMERGENCY_CUTOFF:       # HLD 03 §8: a cutoff always passes through LOCKOUT
+                self._move_episode(conn, episode, E.LOCKOUT, actor=SYSTEM_ACTOR, reason_code="SAFETY_TRIP",
+                                   reason=result.safety_trip or "cutoff")
+                episode = self._episode(conn, episode["id"])
             if state is E.SHUTTING_DOWN:
                 self._move_episode(conn, episode, E.SUBMITTING, actor=SYSTEM_ACTOR, reason_code="EVIDENCE_RECEIVED",
                                    reason="result payload accepted")
@@ -1027,21 +1093,15 @@ class Backend:
                                extra={"outcome": verdict.outcome, "finalized_at": now})
             if lease["state"] in ("ACTIVE", "NEEDS_RECONCILIATION"):
                 conn.execute("UPDATE leases SET state = 'RELEASED' WHERE id = ?", (lease["id"],))
-            if (verdict.outcome == oracle.SAFETY_ABORT
-                    and C(self._campaign(conn, campaign["id"])["state"]) in (C.ARMED, C.RUNNING, C.PAUSING, C.ABORTING)):
+            if verdict.outcome == oracle.SAFETY_ABORT and C(self._campaign(conn, campaign["id"])["state"]) in LOCKABLE:
                 self._lockout(conn, campaign, reason_code="SAFETY_TRIP", reason=verdict.reason, actor=SYSTEM_ACTOR)
             self._settle(conn, campaign)
             return self._verdict_view(conn, self._episode(conn, episode["id"]))
 
     def _classify(self, model: ContractModel, result: EpisodeResult) -> oracle.Verdict:
-        errors: list[str] = []
-        if result.instrument_fault:
-            errors.append("instrument fault reported")
-        if not result.rail_settled and not result.safety_trip:
-            errors.append("rail did not settle")
-        errors.extend(f"timeout: {t}" for t in result.timeouts)
+        errors = ("instrument fault reported",) if result.instrument_fault else ()
         evidence = oracle.Evidence({name: m.value for name, m in result.measured.items()}, result.safety_trip,
-                                   tuple(errors))
+                                   errors, tuple(result.timeouts), result.rail_settled or bool(result.safety_trip))
         try:
             return oracle.classify(model, result.requested, evidence)
         except InvalidRequest as exc:

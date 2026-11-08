@@ -66,7 +66,7 @@ The goal is to make every physical action explainable and recoverable. At any mo
 | Component | State-machine responsibility |
 |---|---|
 | Console | Requests campaign actions and displays state; does not directly change hardware state |
-| BFF Service | Adds trusted researcher/project context and forwards valid user actions |
+| Console server routes | Add the operator token and recorded actor, forward valid user actions (no separate BFF, HLD 01 §2.1) |
 | Backend Service | Owns authoritative campaign, candidate, episode, lease, and outcome records |
 | Agent Service | Owns campaign planning lifecycle, obtains history/domain/configuration/budget from Backend, supplies Decision context, submits returned candidates, accounts for budget, and schedules confirmation/minimization work |
 | Decision Service | Implements the common planner interface and candidate-selection algorithms; returns a candidate and rationale for supplied context |
@@ -122,6 +122,11 @@ stateDiagram-v2
     ABORTING --> ABORTED: Bench confirms shutdown
     RUNNING --> LOCKED_OUT: Safety trip
     ARMED --> LOCKED_OUT: Safety trip
+    PAUSING --> LOCKED_OUT: Safety trip
+    PAUSED --> LOCKED_OUT: Safety trip or E-stop while paused
+    ABORTING --> LOCKED_OUT: Cutoff while aborting
+    PAUSING --> ABORTING: Abort requested
+    PAUSED --> ABORTING: Abort requested
     LOCKED_OUT --> DRAFT: Cause reviewed and manual reset
     READY --> DRAFT: Configuration changed
     COMPLETED --> [*]
@@ -413,6 +418,10 @@ The required behavior is:
 7. Researcher inspects the fixture and manually resets the interlock.
 8. Campaign returns to `DRAFT`; it is not automatically re-armed.
 
+### 13.1 Host-side second check of rail read-backs
+
+The test controller enforces rail limits in hardware and is the primary protection. The Controller also checks every rail voltage and current the bench returns for an episode against the contract's `safety.channels` limits, using the shared safety library (`capture_trips`). A reading over its limit turns the episode into a safety abort and locks the campaign out. A voltage trips only when it exceeds `maxV` by more than its read-back uncertainty U (the observation tied to that control by a validity rule), because a reading within U of the limit cannot be told apart from one at the limit; a control may then be requested at exactly `maxV` without noise alone locking the bench out. Currents carry no declared uncertainty and are compared directly. Readings the bench did not take are not judged here; the Oracle treats missing required measurements as invalid (§15.1). Decided 2026-11-08.
+
 **Open decision: resuming after a lockout.** Returning to `DRAFT` discards the campaign's place in its budget, which breaks the research accounting for a campaign that tripped once for a fixture reason.
 
 **Recommended:** keep the safety behavior above (no automatic re-arm, physical review required). After review, allow the researcher to create a *continuation* campaign that links to the locked-out one, inherits its history and remaining budget, and must pass validation and arming again. A continuation is allowed only if the contract, fixture, firmware, and calibration hashes are unchanged; otherwise a new campaign starts. Reports present the two as one campaign with a recorded lockout gap.
@@ -438,7 +447,8 @@ Outcome classification occurs only after the required evidence is available or e
 
 1. Did a safety mechanism trigger? If yes, `SAFETY_ABORT`.
 2. Were the requested conditions applied and measured within tolerance? If no, `INVALID_EXPERIMENT`.
-3. Are all required observations present and trustworthy? If no, `INVALID_EXPERIMENT`.
+3. Are all required observations present and trustworthy? If no, `INVALID_EXPERIMENT`, except as in 3a.
+   3a. If a present, trustworthy observation violates a reviewed requirement beyond its guard band, the outcome is `DUT_FAILURE` even when another required observation is missing; the reason names the missing one. A missing reading cannot undo a measured failure (decided 2026-11-08).
 4. Did a reviewed failure rule evaluate true? If yes, `DUT_FAILURE`.
 5. Did all reviewed pass requirements hold? If yes, `PASS`.
 6. Otherwise, `INVALID_EXPERIMENT` with an inconclusive-oracle reason.

@@ -29,6 +29,11 @@ def with_safety(contract, **changes):
     return dataclasses.replace(contract, safety=dataclasses.replace(contract.safety, **changes))
 
 
+def with_channel_max(contract, target, max_v):
+    channels = {**contract.safety.channels, target: {**contract.safety.channels[target], "maxV": max_v}}
+    return with_safety(contract, channels=channels)
+
+
 CONTRACT = build()
 
 
@@ -288,8 +293,22 @@ class TimeTests(RuleTestCase):
     def test_non_duration_ms_control_is_not_a_duration(self):
         contract = with_safety(CONTRACT, max_episode_s=1.0)
         self.assertNotIn("DURATION_EXCEEDS_MAX", self.codes(baseline(flashOffsetMs=0, dwellMs=200), contract=contract))
-        other_unit = replace_control(CONTRACT, "dwellMs", unit="min")
-        self.assertApproved(baseline(), contract=other_unit)
+        other_unit = replace_control(CONTRACT, "dwellMs", unit="min")   # cannot be converted: fail closed
+        self.assertRejected("UNEVALUABLE", baseline(), contract=other_unit)
+
+    def test_any_duration_control_counts_toward_the_episode_time(self):
+        renamed = replace_control(CONTRACT, "dwellMs", unit="s")
+        controls = {("holdS" if k == "dwellMs" else k): v for k, v in renamed.controls.items()}
+        contract = with_safety(dataclasses.replace(renamed, controls=controls), max_episode_s=8.0)
+        values = baseline()
+        values["holdS"] = values.pop("dwellMs")
+        values["holdS"] = 7.9
+        self.assertRejected("EPISODE_TIME_BUDGET", values, contract=contract)
+
+    def test_unitless_control_bound_to_a_channel_is_still_voltage_limited(self):
+        no_unit = replace_control(CONTRACT, "oledRailV", unit=None)
+        self.assertRejected("CHANNEL_VOLTAGE_LIMIT", baseline(oledRailV=3.6),
+                            contract=with_channel_max(no_unit, "supply.ch2", 3.4))
 
     def test_unevaluable_time(self):
         no_shutdown = replace_control(CONTRACT, "oledRailV", shutdown=None)

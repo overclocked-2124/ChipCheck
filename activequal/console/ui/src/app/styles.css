@@ -87,3 +87,4 @@ table.grid thead th { background: var(--muted-bg); } table.grid tbody th { font-
 .legend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; font-size: .85rem; }
 .timeline { list-style: none; margin: 0; padding: 0; max-height: 18rem; overflow: auto; font-size: .85rem; } .timeline li { padding: .2rem 0; border-bottom: 1px solid var(--line); }
 @media (max-width: 700px) { html { font-size: 16px; } .topbar { padding: .5rem; } main { padding: .6rem; } }
+pre.report { white-space: pre-wrap; max-height: 28rem; overflow: auto; font-size: 0.85rem; }

@@ -109,7 +109,7 @@ Loopback binding alone does not stop another local process from calling the cont
 
 ## 8. Secrets and configuration
 
-- Configuration lives in environment variables and a per-workstation config file outside the repository (for example `CHIPCHECK_DECISION_URL`, the control-plane listen address, the database path).
+- Configuration lives in environment variables and a per-workstation config file outside the repository (for example `ACTIVEQUAL_URL`, `ACTIVEQUAL_OPERATOR_TOKEN_FILE`, the control-plane listen address, the database path).
 - The bench token is stored in a file readable only by the bench process user (mode 0600) or in the OS keyring, never in the repository or logs.
 - Logs and exported evidence bundles must not contain tokens; exports are scanned before release (PRD §26).
 - Firmware binaries, schematics, and traces are treated as potentially confidential and kept local by default.

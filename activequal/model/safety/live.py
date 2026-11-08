@@ -54,3 +54,43 @@ def live_trips(contract: ContractModel, readings: LiveReadings) -> tuple[str, ..
     except Exception as exc:  # fail closed: anything unevaluable is a trip
         trips.append(f"live safety check could not be evaluated ({type(exc).__name__})")
     return tuple(trips)
+
+
+def _current_key(control: str) -> str:
+    return control[:-1] + "A" if control.endswith("V") else control + "A"   # oledRailV -> oledRailA
+
+
+def capture_trips(contract: ContractModel, volts: dict[str, float], amps: dict[str, float]) -> tuple[str, ...]:
+    """Second check of rail read-backs taken during an episode (HLD 03 §13.1).
+
+    ``volts`` is keyed by control name and ``amps`` by the matching current name (``oledRailA``).
+    Only readings the bench took are judged; the Oracle handles missing required measurements.
+    A voltage trips when it exceeds ``maxV`` by more than its read-back uncertainty U (the
+    observation the contract's validity rule ties to that control), because a reading within U
+    of the limit cannot be told apart from one at the limit. Currents carry no declared
+    uncertainty and are compared directly. The test controller's hardware limit stays primary.
+    """
+    trips: list[str] = []
+    try:
+        if contract.safety is None:
+            return ()
+        allowance = {rule.tracks: (contract.observations or {})[rule.metric].uncertainty
+                     for rule in contract.validity or [] if rule.metric in (contract.observations or {})}
+        for name, control in contract.controls.items():
+            target = control.bind[0] if control.bind else None
+            limits = contract.safety.channels.get(target) if target else None
+            if not limits:
+                continue
+            for kind, unit, value, limit, slack in (
+                    ("voltage", "V", volts.get(name), limits["maxV"], allowance.get(name, 0.0)),
+                    ("current", "A", amps.get(_current_key(name)), limits["maxA"], 0.0)):
+                if value is None:
+                    continue
+                if not _finite(value):
+                    trips.append(f"host check: {kind} reading on {target} is not a finite number")
+                elif value > limit + slack:
+                    trips.append(f"host check: {kind} on {target} measured {value:g} {unit}, "
+                                 f"above the {limit:g} {unit} limit")
+    except Exception as exc:  # fail closed
+        trips.append(f"host check could not be evaluated ({type(exc).__name__})")
+    return tuple(trips)

@@ -17,7 +17,7 @@ const SPECS: Record<CampaignAction, ActionSpec> = {
   start: { action: "start", label: "Start", reviewer: false, danger: false },
   pause: { action: "pause", label: "Pause after this episode", reviewer: false, danger: false },
   resume: { action: "resume", label: "Resume", reviewer: false, danger: false },
-  abort: { action: "abort", label: "Stop and de-energize (abort)", reviewer: false, danger: true },
+  abort: { action: "abort", label: "Stop and de-energize (abort). If anything looks wrong, press the E-stop", reviewer: false, danger: true },
   disarm: { action: "disarm", label: "Disarm", reviewer: false, danger: true },
   "clear-lockout": { action: "clear-lockout", label: "Clear lockout", reviewer: true, danger: false },
 };

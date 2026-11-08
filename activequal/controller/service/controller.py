@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable
 
 from activequal.adapter.service.base import BenchAdapter
@@ -24,7 +24,7 @@ from activequal.model.canonical import contract_hash as compute_contract_hash
 from activequal.model.contract import ContractModel, parse_contract
 from activequal.model.errors import InvalidRequest
 from activequal.model.evidence import manifest_hash
-from activequal.model.safety import check_candidate
+from activequal.model.safety import SHUTDOWN_ALLOWANCE_S, capture_trips, check_candidate
 from activequal.service.errors import BackendError
 
 log = logging.getLogger("activequal.controller")
@@ -51,7 +51,7 @@ class RunReport:
 def health_report(health: BenchHealth) -> dict[str, Any]:
     """The bench health message of HLD 05 §7. A latched lockout counts as an active trip."""
     return {"estopReleased": health.estop_released, "interlockHealthy": not health.locked_out,
-            "watchdogHealthy": health.watchdog_ok, "outputsInShutdown": not health.locked_out or health.estop_released,
+            "watchdogHealthy": health.watchdog_ok, "outputsInShutdown": health.outputs_off,
             "adaptersCompatible": health.dut_connected and health.instruments_connected,
             "tripActive": health.locked_out, "dutFirmwareSha256": health.dut_firmware_sha256,
             "mcuFirmwareSha256": health.mcu_firmware_sha256}
@@ -173,12 +173,30 @@ class Controller:
             episode_id=episode_id, attempt=claim["attempt"], contract_hash=claim["contractHash"],
             fixture_id=self.fixture_id, conditions=dict(claim["requested"]),
             duration_ms=int(claim["requested"].get("dwellMs", DEFAULT_DWELL_MS)),
-            seed=int(claim["episodeSeed"]))
-        capture, error, abort, lease_lost = self._execute(lease_id, episode)
+            seed=int(claim["episodeSeed"]),
+            channel_limits=dict(model.safety.channels) if model.safety else {},
+            slew_v_per_s={n: c.slew_per_s_max for n, c in model.controls.items() if c.slew_per_s_max},
+            calibration={t: {"gain": v["gain"], "offset": v["offset"]} for t, v in (claim.get("calibration") or {}).items()},
+            max_episode_s=claim.get("maxEpisodeS"))
+        limit_s = float(claim.get("maxEpisodeS", 0)) + SHUTDOWN_ALLOWANCE_S
+        capture, error, abort, lease_lost, overran = self._execute(lease_id, episode, limit_s)
 
         trip = None
-        if error is not None:
+        if overran:                             # the cause, even if the cut then made the adapter fail
+            trip = f"episode exceeded {limit_s:g} s (maxEpisodeS plus shutdown allowance); cutoff requested"
+        elif error is not None:
             trip = f"controller error: {error!r}"
+        elif lease_lost:
+            trip = "lease lost during the episode; cutoff requested"
+        if trip and capture is not None and not capture.trip:
+            capture = replace(capture, trip=trip, cutoff_engaged=True,
+                              phases_reached=capture.phases_reached + (Phase.EMERGENCY_CUTOFF.value,))
+        if capture is not None and not capture.trip and not capture.cutoff_engaged:
+            exceeded = capture_trips(model, capture.measured_rail_v, capture.measured_current_a) if model else ()
+            if exceeded:
+                self.adapter.emergency_shutdown()
+                capture = replace(capture, trip="; ".join(exceeded), cutoff_engaged=True,
+                                  phases_reached=capture.phases_reached + (Phase.EMERGENCY_CUTOFF.value,))
         phases = [] if capture is None else [p for p in capture.phases_reached if p != Phase.PREFLIGHT.value]
         if capture is None:
             phases = [Phase.EMERGENCY_CUTOFF.value]
@@ -210,13 +228,20 @@ class Controller:
             return RunReport(PREFLIGHT_FAILED, claim["episodeId"], detail=reasons + (str(exc),))
         return RunReport(PREFLIGHT_FAILED, claim["episodeId"], report.verdict, reasons)
 
-    def _execute(self, lease_id: str, episode: ApprovedEpisode
-                 ) -> tuple[RawBenchCapture | None, BaseException | None, bool, bool]:
-        """Run the adapter in a worker while the lease is kept alive. Returns (capture, error, abort, lease_lost)."""
-        abort = lease_lost = False
+    def _execute(self, lease_id: str, episode: ApprovedEpisode, limit_s: float
+                 ) -> tuple[RawBenchCapture | None, BaseException | None, bool, bool, bool]:
+        """Run the adapter in a worker while the lease is kept alive.
+
+        Returns (capture, error, abort, lease_lost, overran). The Controller is the final software bound on
+        episode time (HLD 03 §21): past ``limit_s`` it cuts power whatever the adapter is doing."""
+        abort = lease_lost = overran = False
+        started = time.monotonic()
         with ThreadPoolExecutor(max_workers=1) as pool:
             future = pool.submit(self.adapter.apply_and_measure, episode)
             while True:
+                if not overran and limit_s > SHUTDOWN_ALLOWANCE_S and time.monotonic() - started > limit_s:
+                    overran = True
+                    self.adapter.emergency_shutdown()
                 try:
                     future.result(timeout=self.heartbeat_interval_s)
                     break
@@ -231,11 +256,11 @@ class Controller:
                         lease_lost = True
                         self.adapter.emergency_shutdown()
         try:
-            return future.result(), None, abort, lease_lost
+            return future.result(), None, abort, lease_lost, overran
         except BaseException as exc:                    # uncertain physical state: cut power, report a trip
             log.error("adapter failed during %s: %r", episode.episode_id, exc)
             self.adapter.emergency_shutdown()
-            return None, exc, abort, lease_lost
+            return None, exc, abort, lease_lost, overran
 
     def _report_phases(self, lease_id: str, phases: list[str]) -> str | None:
         for phase in phases:

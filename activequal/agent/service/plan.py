@@ -35,7 +35,7 @@ class PlanConfig:
         if not self.init_enabled:
             return 0
         wanted = max(pairwise_rows, math.ceil(self.init_min_fraction * self.discovery_budget))
-        return min(wanted, math.ceil(self.init_max_fraction * self.discovery_budget), self.discovery_budget)
+        return min(wanted, math.floor(self.init_max_fraction * self.discovery_budget), self.discovery_budget)
 
 
 def _section(plan: dict[str, Any], key: str) -> dict[str, Any]:

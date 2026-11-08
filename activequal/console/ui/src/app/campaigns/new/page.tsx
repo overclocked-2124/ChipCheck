@@ -41,7 +41,7 @@ export default function NewCampaignPage() {
             <label>Contract version<input type="number" min={1} value={version} onChange={e => setVersion(e.target.value)} required /></label>
             <label>Fixture id<input value={fixtureId} onChange={e => setFixtureId(e.target.value)} required /></label>
             <label>Planner
-              <select value={planner} onChange={e => setPlanner(e.target.value)}>{PLANNERS.map(p => <option key={p}>{p}</option>)}</select>
+              <select value={planner} onChange={e => setPlanner(e.target.value)}>{PLANNERS.filter(p => p !== "manual").map(p => <option key={p}>{p}</option>)}</select>
             </label>
             <label>Seed<input type="number" value={seed} onChange={e => setSeed(e.target.value)} required /></label>
             <label>Discovery episodes<input type="number" min={1} value={discovery} onChange={e => setDiscovery(e.target.value)} required /></label>

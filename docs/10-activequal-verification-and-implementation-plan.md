@@ -18,8 +18,9 @@ This document defines how ActiveQual is built and verified within the 12-week pr
 | Decision Service | Built: `tpe`, `gp`, `random`, `grid`, `fixed_corner`, `coverage`, `manual`; property tests |
 | Agent | Built: phase plan, replayable verification sessions (confirm, minimize, necessity, bracket) |
 | Controller, Adapter | Built: Controller with spool, simulated bench (profiles B1a/B1b/B1w/B2/B3), serial protocol, MCU emulator and serial host adapter (tested against the emulator only) |
-| Tools | Built: benchmark CLI, full-stack parity check, report and bundle export |
-| Console | Built: contracts, fixtures, campaign creation, live campaign page, results; not yet browser-verified end to end |
+| Tools | Built: benchmark CLI, full-stack parity check, report and bundle export, demo seeding, calibration fit, bench acceptance probes (HLD 02 §18 tests 1 and 7) |
+| Console | Built. Browser-checked on the simulated stack (2026-11-08): campaign creation, arming checklist with Arm gated on it, live campaign (polling; the SSE route exists but the page does not use it yet), results, export, comparison, fixture and calibration display. Not yet clicked through in a browser: contract editing and approval (the demo was seeded through the API), recording a calibration, clearing a lockout. Missing against §4 "every HLD 03 §22 item visible": manual candidate entry, an episode detail page with requested vs measured values and shutdown confirmation, failure-region and robustness charts, per-counterexample origin and margins (the exported report has them), Kaplan–Meier comparison, contract version diff |
+| CI | GitHub Actions workflow written (Python suite, emulator bench self-test, Console typecheck, tests and build); not yet run on GitHub |
 | Test-controller and DUT firmware | Not started (human work) |
 | Hardware | Parts and reviewed limits open (HLD 02 §20); datasheet-based planning estimates in HLD 02 §19.2 |
 
@@ -44,7 +45,7 @@ The control plane and the simulator need no hardware, so L0–L2 can run in clou
 | Backend | HLD 05 §5 and §7 endpoints; HLD 03 transitions with every unlisted transition rejected; idempotency per HLD 05 §8; audit events for every transition |
 | Oracle | HLD 04 §13 Options A and B; classification order per HLD 03 §15.1; tests at each requirement boundary including inconclusive bands |
 | Agent | Campaign loop with discovery and verification pools; verification phase per HLD 04 §14 (necessity probes, default pools of 50 discovery and 24 verification episodes); stop rules |
-| Decision | Adaptive and random planners done (see §2); remaining: fixed/corner and coverage baseline planners (WP3) and the `manual` planner (WP16) |
+| Decision | All planners built: `tpe`, `gp`, `random`, `grid`, `fixed_corner`, `coverage`, `manual` (see §2) |
 | Simulator adapter | Implements the `BenchAdapter` interface with the HLD 06 benchmark profiles; under 1 ms per episode |
 | Controller | HLD 03 episode state machine; preflight and live checks; shutdown and cutoff paths; local spool |
 | Adapter | Capability reporting (HLD 02 §9); serial driver per HLD 05 §9; loopback and physical implementations |
@@ -174,7 +175,7 @@ Two-person review for any safety-limit or fixture change (PRD §28.1).
 |---|---|
 | Project start date and 12 vs 24 weeks | 12 working weeks from 2026-11-16 plus one holiday buffer week, ending 2027-02-12; the PRD's 24-week items are stretch (§6) |
 | Second DUT and natural fault (PRD exit criteria) | Stretch goals, not MVP; the final report states them as not attempted rather than as failed |
-| CI provider | GitHub Actions, since the repository is on GitHub: L0–L2 on every pull request on Ubuntu, and weekly on macOS and Windows to hold the cross-platform constraint in §5.3. L1 planner comparisons with hundreds of campaigns run on demand, not per commit |
+| CI provider | GitHub Actions, since the repository is on GitHub: L0–L2 on every pull request on Ubuntu (built). A weekly macOS and Windows run to hold the cross-platform constraint in §5.3 is planned, not built. L1 planner comparisons with hundreds of campaigns run on demand, not per commit |
 
 ## 11. Change log
 

@@ -215,7 +215,9 @@ class _Check:
             target = spec.bind[0] if spec.bind else None
             if capabilities is not None and target is not None and target not in capabilities:
                 self.add(CHANNEL_CAPABILITY_MISSING, name, f"fixture has no {target!r} for {name}")
-            if spec.kind not in NUMERIC_TYPES or spec.unit != "V":
+            # Any numeric control bound to a declared safety channel is held to its voltage limit, whatever
+            # its unit says; a missing or odd unit must not switch the check off (fail closed, PRD FR-05).
+            if spec.kind not in NUMERIC_TYPES or (spec.unit != "V" and target not in channels):
                 continue
             if target not in channels:
                 self.add(CHANNEL_CAPABILITY_MISSING, name, f"{name} is a voltage with no declared safety channel")
@@ -226,14 +228,18 @@ class _Check:
                              f"{_r(channels[target]['maxV'])} V")
 
     def dwell_s(self, unusable: list[str]) -> Decimal:
-        spec = self.contract.controls.get("dwellMs")
-        if spec is None:
-            return Decimal(0)
-        value = self.conditions.get("dwellMs")
-        if "dwellMs" in self.bad or not _is_number(value):
-            unusable.append("dwellMs")
-            return Decimal(0)   # a lower bound: the checks below still run on what is known
-        return _dec(value) if spec.unit == "s" else _dec(value) / 1000
+        """Sum of every duration control (an upper bound when several overlap). A duration in a unit other
+        than ms or s cannot be converted, so it makes the time budget unevaluable."""
+        total = Decimal(0)
+        for name, spec in self.contract.controls.items():
+            if spec.kind != "duration":
+                continue
+            value = self.conditions.get(name)
+            if name in self.bad or not _is_number(value) or spec.unit not in ("ms", "s", None):
+                unusable.append(name)
+                continue
+            total += _dec(value) if spec.unit == "s" else _dec(value) / 1000   # no unit: ms, as in the HLD 04 examples
+        return total
 
     def ramp_s(self, unusable: list[str]) -> tuple[Decimal, str | None]:
         worst, worst_name = Decimal(0), None

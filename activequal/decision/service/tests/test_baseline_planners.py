@@ -302,6 +302,12 @@ class ManualTests(unittest.TestCase):
         result = self.manual([self.point(), self.point(flashOffsetMs=15)])  # same point once pinned
         self.assertEqual(len(result["tests"]), 1)
 
+    def test_forbidden_point_is_passed_on_for_backend_to_reject(self):
+        forbidden = self.point(workload="flash_write", oledRailV=3.6)
+        result = self.manual([forbidden])
+        self.assertEqual(len(result["tests"]), 1)
+        self.assertEqual(result["tests"][0]["conditions"]["workload"], "flash_write")
+
     def test_validation_errors(self):
         bad = {
             "unknown": self.point(extra=1),
@@ -312,7 +318,6 @@ class ManualTests(unittest.TestCase):
             "bad option": self.point(workload="sleep"),
             "bad bool": self.point(redLed="yes"),
             "bool as number": self.point(dwellMs=True),
-            "forbidden": self.point(workload="flash_write", oledRailV=3.6),
         }
         for label, candidate in bad.items():
             with self.assertRaises(InvalidRequest, msg=label) as ctx:
@@ -331,6 +336,22 @@ class ManualTests(unittest.TestCase):
             self.manual([{k: v for k, v in self.point().items() if k != "dwellMs"}])
         with self.assertRaisesRegex(InvalidRequest, "step grid"):
             self.manual([self.point(oledRailV=3.25)])
+
+
+
+class CoverageOneAtATimeTests(unittest.TestCase):
+    """The Agent asks for one candidate per call (HLD 06 §11): coverage must still walk every pairwise row."""
+
+    def test_eight_single_calls_cover_all_eight_rows(self):
+        from activequal.decision.service.decision import propose
+        from activequal.model.examples import oled_example_contract
+        contract, history, seen = oled_example_contract(), [], set()
+        for _ in range(8):
+            cond = propose({"contract": contract, "method": "coverage", "seed": 1, "count": 1,
+                            "history": history})["tests"][0]["conditions"]
+            history.append({"conditions": cond, "outcome": "PASS", "robustness": 0.5})
+            seen.add((cond["redLed"], cond["greenLed"], cond["workload"]))
+        self.assertEqual(len(seen), 8)
 
 
 if __name__ == "__main__":

@@ -40,7 +40,7 @@ This model provides the foundation for **Doc 05’s APIs and protocols** and **D
 
 ## 2. Core Experiment and Ownership
 
-For the initial demonstration, one campaign runs up to 30 discovery experiments on the ESP32-S3 display-sensor setup, plus a separate verification pool for confirming and minimizing a failure (§14). Each experiment applies a chosen combination of OLED voltage, LED states, and workload, then records the measurements and result.
+For the initial demonstration, one campaign runs up to 50 discovery experiments on the ESP32-S3 display-sensor setup, plus a separate verification pool for confirming and minimizing a failure (§14). Each experiment applies a chosen combination of OLED voltage, LED states, and workload, then records the measurements and result.
 
 - **Decision** chooses the next combination using previous results.
 - **Agent** manages the run and its experiment budget.
@@ -224,9 +224,11 @@ The oracle compares usable measurements with the public requirements. A measured
   "safety": {"channels": {"supply.ch2": {"maxA": 0.2, "maxV": 3.6}, "supply.ch3": {"maxA": 0.2, "maxV": 3.6}},
              "maxTempC": 60, "maxEpisodeS": 10},
   "templates": [],
-  "campaign": {"budget": 30, "seed": 42, "plan": "default_v1"}
+  "campaign": {"budget": 74, "seed": 42, "plan": "default_v1"}
 }
 ```
+
+**Example values are placeholders.** The limits, timeouts and uncertainties in this example (e.g. `maxA` 0.2, `maxTempC` 60, latency U = 5 ms, rail tolerance 0.03 V) are the code's example contract (`activequal/model/examples.py`), not reviewed limits. The planning estimates in HLD 02 §19.2 (OLED rail trip 40 mA, 45 °C fixture trip, latency U ≈ 6 ms, ±10 mV settle band) are what the first real contract should start from, after review (HLD 02 §20).
 
 ### 12.1 Field rules
 
@@ -245,7 +247,7 @@ Changing any field creates a new contract version and invalidates the arm state 
 
 **Example limits:** the OLED rail range in the example may sit partly below the SSD1306's specified supply, and many breakout modules add a regulator that changes what the controller sees. Take limits from the selected parts (HLD 02 §19.1).
 
-**Implementation status:** The Decision Service reads `controls`, `activeWhen`, and `forbidden` from this schema. Backend validation, the Oracle, and the console do not yet consume it.
+**Implementation status:** Decision, Backend validation, the Oracle, the Controller and the Console all consume contract v2.
 
 ## 13. Robustness and Verdict
 
@@ -264,7 +266,7 @@ Robustness is the minimum margin across applicable requirements, following signa
 
 **Option B — guard-banded verdict (outcome).** With `U` the observation's declared expanded uncertainty (§12.1; about 2σ), a `<=` requirement passes when `x ≤ limit − U`, fails when `x > limit + U`, and is inconclusive in between; other operators apply the same rule to each bound. This follows the guard-banding decision rules used by calibration and test laboratories (ILAC-G8 / ISO/IEC 17025). An inconclusive episode may be replayed under the campaign plan; if it remains inconclusive it is recorded as `INVALID_EXPERIMENT` with an inconclusive reason.
 
-A missing required observation always produces `INVALID_EXPERIMENT`, never a margin. Classification follows the order in HLD 03 §15.1.
+A missing required observation never produces a margin and is never a pass. It produces `INVALID_EXPERIMENT`, unless a present, trustworthy observation violates a requirement beyond its guard band, in which case the outcome is `DUT_FAILURE` and the reason names the missing observation (HLD 03 §15.1 step 3a). Classification follows the order in HLD 03 §15.1.
 
 **ActiveQual decision (2026-11-06):** the research lead proposes each requirement's `nominal` from the DUT's public specification. The hardware and safety lead sets each observation's `uncertainty` as U = 2σ from the fixture's calibration record (HLD 06 §6). Both go through the two-person review for contract changes. Until a calibration exists, the HLD 02 §19.2 planning value (U = 6 ms for OLED latency) is used in the simulator only; `U` must come from calibration of the selected bench before any physical campaign.
 
@@ -275,7 +277,7 @@ A missing required observation always produces `INVALID_EXPERIMENT`, never a mar
 ```json
 "plan": {
   "discoveryBudget": 50, "verificationBudget": 24,
-  "init": {"enabled": false, "minFraction": 0.2, "maxFraction": 0.35, "design": "pairwise+sobol", "include": ["nominal", "corners"]},
+  "init": {"enabled": false, "minFraction": 0.2, "maxFraction": 0.35, "design": "pairwise+halton", "include": ["nominal", "corners"]},
   "confirm": {"maxReplays": 3, "confirmIfFails": 2},
   "minimize": {"order": "discrete_then_continuous", "bracket": "expand_then_bisect", "necessityProbes": true},
   "onConfirmed": "stop",
@@ -283,7 +285,7 @@ A missing required observation always produces `INVALID_EXPERIMENT`, never a mar
 }
 ```
 
-1. **Coverage (optional, off by default).** When `init.enabled` is true: a pairwise covering array over the categorical and Boolean controls, with nominal and corner values folded into its rows and Sobol points for continuous values. Size is the larger of the array and 20% of the discovery budget, capped at 35%.
+1. **Coverage (optional, off by default).** When `init.enabled` is true: a pairwise covering array over the categorical and Boolean controls, with nominal and corner values folded into its rows and Halton points for continuous values (as built in the `coverage` planner). Size is the larger of the array and 20% of the discovery budget, capped at 35%.
 2. **Adaptive hunting.** The selected planner proposes the remaining discovery episodes. Repeated rejection of its candidates stops the campaign with a visible planner-failure reason.
 3. **Verification**, started only by a guard-banded failure. Replay up to three times: two failures confirm, two initial passes mark the failure transient, a split result is decided by the third replay. Then return each non-nominal control to `nominal` one at a time, keeping changes that preserve the failure; flip each discrete control already at `nominal` once (a necessity probe) to show whether its nominal value is required; and bracket each remaining continuous control by expanding outward until a pass and then bisecting. When the verification budget runs out, the interval is reported at its achieved resolution.
 
