@@ -252,3 +252,13 @@ test("contract text parsing and form round-trip", () => {
   const blank = applyForm(parsed.value, { ...form, dut: "" });
   assert.equal((blank.setup as { dut: string }).dut, "esp32s3-oled-demo");
 });
+
+test("an unconfirmed failure is never reported as 'no counterexample found'", async () => {
+  const { resultStatement } = await import("../src/lib/results.ts");
+  const base = { id: "c", state: "COMPLETED", episodesByOutcome: { PASS: 20, DUT_FAILURE: 1 } } as never;
+  assert.equal(resultStatement(base, []).kind, "inconclusive");
+  const aborted = { id: "c", state: "ABORTED", episodesByOutcome: { PASS: 5 } } as never;
+  assert.match(resultStatement(aborted, []).text, /before the campaign was aborted/);
+  const empty = { id: "c", state: "COMPLETED", episodesByOutcome: {} } as never;
+  assert.equal(resultStatement(empty, []).kind, "inconclusive");
+});

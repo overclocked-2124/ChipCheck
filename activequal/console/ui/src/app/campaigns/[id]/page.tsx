@@ -4,6 +4,7 @@ import Link from "next/link";
 import { use, useState } from "react";
 import { useLoad, useNow } from "@/components/api";
 import { ArmChecklist, ClearLockout } from "@/components/campaign-controls";
+import { useCampaignEvents } from "@/components/use-events";
 import { Empty, ErrorBox, KeyValues, Loading, Notice, Section, StateBadge, ActionButton } from "@/components/ui";
 import { allowedActions, STATE_MEANING, type CampaignAction } from "@/lib/actions";
 import { activeEpisode, ageSeconds, benchStatus, formatAge, lockoutInfo, stopExplanation } from "@/lib/live";
@@ -12,7 +13,7 @@ import type { ApiResult, CampaignEvent, CampaignView, FixtureView, UiError } fro
 export default function CampaignPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const campaign = useLoad<CampaignView>(`/v1/campaigns/${encodeURIComponent(id)}`, 2000);
-  const events = useLoad<{ events: CampaignEvent[] }>(`/v1/campaigns/${encodeURIComponent(id)}/events`, 2000);
+  const events = useCampaignEvents(id);
   const fixtureId = campaign.data?.fixtureId ?? null;
   const fixture = useLoad<FixtureView>(fixtureId ? `/v1/fixtures/${encodeURIComponent(fixtureId)}` : null, 3000);
   const now = useNow();
@@ -23,7 +24,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
   const c = campaign.data;
   if (campaign.loading) return <Loading what="campaign" />;
   if (!c) return <ErrorBox error={campaign.error} title="Could not load the campaign" />;
-  const log = events.data?.events ?? [];
+  const log = events.events;
   const current = activeEpisode(log);
   const stop = stopExplanation(c.state, log);
   const lock = lockoutInfo(c.state, log);
@@ -41,6 +42,8 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       <div className="row"><h1>Campaign <code>{c.id.slice(0, 12)}</code></h1><StateBadge state={c.state} /></div>
       <p className="hint">{STATE_MEANING[c.state]}</p>
       <ErrorBox error={campaign.error} title="Showing the last known state" />
+      <ErrorBox error={events.error} title="Event log not current: episode and stop details below may be stale" />
+      <ErrorBox error={fixture.error} title="Bench status not current" />
       {c.agentError ? <Notice tone="bad">Agent stopped: {c.agentError}</Notice> : null}
       <Section title="Actions">
         <div className="row">
@@ -74,7 +77,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       </Section>
       {stop ? <Notice tone="info"><strong>{stop.headline}</strong> <code>{stop.reasonCode}</code> {stop.reason} ({stop.actor})</Notice> : null}
       {lock ? (
-        <Notice tone="bad"><strong>Locked out: {lock.cause}</strong>
+        <Notice tone="bad"><strong id="lockout">Locked out: {lock.cause}</strong>
           <ul>{lock.checklist.map(item => <li key={item}>{item}</li>)}</ul>
           <p>Clearing the lockout needs a reviewer; see below.</p>
         </Notice>
