@@ -198,6 +198,14 @@ class Backend:
                 "contractHash": row["contract_hash"], "approvalsRequired": row["approvals_required"],
                 "approvedBy": approvers, "approved": len(approvers) >= row["approvals_required"]}
 
+    @staticmethod
+    def _calibration_channels(conn: sqlite3.Connection, fixture: sqlite3.Row) -> dict[str, Any]:
+        if not fixture["current_calibration_id"]:
+            return {}
+        row = conn.execute("SELECT channels_json FROM calibrations WHERE id = ?",
+                           (fixture["current_calibration_id"],)).fetchone()
+        return json.loads(row["channels_json"]) if row else {}
+
     def _latest_approved(self, conn: sqlite3.Connection, contract_key: str) -> sqlite3.Row | None:
         for row in conn.execute("SELECT * FROM contract_versions WHERE contract_key = ? ORDER BY version DESC",
                                 (contract_key,)).fetchall():
@@ -863,6 +871,7 @@ class Backend:
                     "contractHash": episode["contract_hash"], "fixtureId": fixture_id,
                     "contract": json.loads(contract_json),
                     "fixtureCapabilities": json.loads(fixture["capabilities_json"]),
+                    "calibration": self._calibration_channels(conn, fixture),
                     "requested": json.loads(episode["requested_json"]),
                     "role": episode["role"], "leaseExpiresAt": isoformat(now + timedelta(seconds=self.lease_ttl_s)),
                     "maxEpisodeS": model.safety.max_episode_s,

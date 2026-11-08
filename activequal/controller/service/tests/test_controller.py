@@ -272,5 +272,13 @@ class SpoolTests(unittest.TestCase):
                 Spool(folder).save({"episodeId": "../../etc/x", "attempt": 1})
 
 
+
+class HealthReportTests(unittest.TestCase):
+    def test_outputs_in_shutdown_comes_from_the_outputs_not_the_lockout(self):
+        from activequal.adapter.service.types import BenchHealth
+        self.assertFalse(ctl.health_report(BenchHealth(ok=False, outputs_off=False))["outputsInShutdown"])
+        self.assertTrue(ctl.health_report(BenchHealth(ok=True))["outputsInShutdown"])
+
+
 if __name__ == "__main__":
     unittest.main()

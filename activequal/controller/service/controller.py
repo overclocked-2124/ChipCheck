@@ -51,7 +51,7 @@ class RunReport:
 def health_report(health: BenchHealth) -> dict[str, Any]:
     """The bench health message of HLD 05 §7. A latched lockout counts as an active trip."""
     return {"estopReleased": health.estop_released, "interlockHealthy": not health.locked_out,
-            "watchdogHealthy": health.watchdog_ok, "outputsInShutdown": not health.locked_out or health.estop_released,
+            "watchdogHealthy": health.watchdog_ok, "outputsInShutdown": health.outputs_off,
             "adaptersCompatible": health.dut_connected and health.instruments_connected,
             "tripActive": health.locked_out, "dutFirmwareSha256": health.dut_firmware_sha256,
             "mcuFirmwareSha256": health.mcu_firmware_sha256}
@@ -173,7 +173,11 @@ class Controller:
             episode_id=episode_id, attempt=claim["attempt"], contract_hash=claim["contractHash"],
             fixture_id=self.fixture_id, conditions=dict(claim["requested"]),
             duration_ms=int(claim["requested"].get("dwellMs", DEFAULT_DWELL_MS)),
-            seed=int(claim["episodeSeed"]))
+            seed=int(claim["episodeSeed"]),
+            channel_limits=dict(model.safety.channels) if model.safety else {},
+            slew_v_per_s={n: c.slew_per_s_max for n, c in model.controls.items() if c.slew_per_s_max},
+            calibration={t: {"gain": v["gain"], "offset": v["offset"]} for t, v in (claim.get("calibration") or {}).items()},
+            max_episode_s=claim.get("maxEpisodeS"))
         limit_s = float(claim.get("maxEpisodeS", 0)) + SHUTDOWN_ALLOWANCE_S
         capture, error, abort, lease_lost, overran = self._execute(lease_id, episode, limit_s)
 
