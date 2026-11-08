@@ -75,7 +75,7 @@ class ApiTestCase(unittest.TestCase):
         self.token = fixture.body["token"]
         until = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
         cal = c.call("POST", "/v1/fixtures/bench-A/calibrations", {
-            "channels": {"supply.ch2": {"gain": 1, "offset": 0, "uncertainty": 0.005}}, "meterIdentity": "Fluke 87V",
+            "channels": {ch: {"gain": 1, "offset": 0, "uncertainty": 0.005} for ch in ("supply.ch2", "supply.ch3")}, "meterIdentity": "Fluke 87V",
             "operator": "sam", "validUntil": until})
         self.assertEqual(cal.status, 201, cal.body)
         self.assertEqual(c.call("POST", "/v1/bench/health", GOOD_HEALTH, human=False, bearer=self.token).status, 200)
@@ -248,7 +248,7 @@ class LiveSystemTests(unittest.TestCase):
                                                       "capabilities": ["supply.ch2", "supply.ch3", "dut", "mcu"]},
                              reviewer=True, name="dana")["token"]
                 call("POST", "/v1/fixtures/bench-A/calibrations", {
-                    "channels": {"supply.ch2": {"gain": 1, "offset": 0, "uncertainty": 0.005}}, "meterIdentity": "Fluke",
+                    "channels": {ch: {"gain": 1, "offset": 0, "uncertainty": 0.005} for ch in ("supply.ch2", "supply.ch3")}, "meterIdentity": "Fluke",
                     "operator": "sam", "validUntil": (datetime.now(timezone.utc) + timedelta(days=5)).isoformat()})
 
                 adapter = SimulatedBenchAdapter("B1w", noise_seed=3)

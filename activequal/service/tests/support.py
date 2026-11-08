@@ -38,7 +38,7 @@ class World:
         b.approve_contract(self.contract_key, 1, ALEX)
         reg = b.register_fixture("bench-A", "A", CAPABILITIES, DANA, approved_mcu_firmware_sha256="m" * 64)
         self.token = reg["token"]
-        b.record_calibration("bench-A", {"supply.ch2": {"gain": 1.0, "offset": 0.0, "uncertainty": 0.005}},
+        b.record_calibration("bench-A", {ch: {"gain": 1.0, "offset": 0.0, "uncertainty": 0.005} for ch in ("supply.ch2", "supply.ch3")},
                              "Fluke 87V #123", "sam", START + timedelta(days=30), SAM)
         b.record_bench_health("bench-A", dict(GOOD_HEALTH))
         campaign = b.create_campaign(self.contract_key, 1, "bench-A", planner, 42, discovery, verification, SAM)

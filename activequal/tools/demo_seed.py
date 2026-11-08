@@ -54,7 +54,7 @@ def seed(client: Client, fixture_id: str) -> dict[str, Any]:
                            "approvedMcuFirmwareSha256": MCU_FIRMWARE}, reviewer=True)
     valid = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
     client.call("POST", f"/v1/fixtures/{fixture_id}/calibrations", "sam",
-                {"channels": {"supply.ch2": {"gain": 1.0, "offset": 0.0, "uncertainty": 0.005}},
+                {"channels": {ch: {"gain": 1.0, "offset": 0.0, "uncertainty": 0.005} for ch in ("supply.ch2", "supply.ch3")},
                  "meterIdentity": "simulated meter", "operator": "sam", "validUntil": valid})
     return {"contractId": key, "version": version, "fixtureId": fixture_id, "benchToken": fixture["token"]}
 

@@ -117,6 +117,24 @@ class FixtureTests(Case):
                                    w.clock.now() - timedelta(days=1), SAM), "INVALID_ARGUMENT")
 
 
+    def arm_refusal(self, w):
+        view = w.backend.validate_campaign(w.campaign_id, w.version, SAM)
+        with self.assertRaises(BackendError) as caught:
+            w.backend.arm_campaign(w.campaign_id, view["version"], SAM)
+        return [r["code"] for r in caught.exception.details["reasons"]]
+
+    def test_arming_needs_every_bound_rail_calibrated(self):
+        w = self.make(arm=False)
+        w.backend.record_calibration("bench-A", {"supply.ch2": {"gain": 1, "offset": 0, "uncertainty": 0.01}}, "m", "o",
+                                     w.clock.now() + timedelta(days=1), SAM)
+        self.assertIn("CALIBRATION_INCOMPLETE", self.arm_refusal(w))
+
+    def test_arming_needs_the_firmware_identity_to_be_stated(self):
+        contract = oled_example_contract()
+        del contract["setup"]["firmwareSha256"]
+        w = self.make(arm=False, contract=contract)
+        self.assertIn("DUT_FIRMWARE_UNSPECIFIED", self.arm_refusal(w))
+
 class LifecycleTests(Case):
     def test_happy_path_states_and_versions(self):
         w = self.make()

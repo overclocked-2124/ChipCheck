@@ -343,6 +343,13 @@ class Backend:
             add("CALIBRATION_EXPIRED", "the fixture's calibration has expired")
         elif tuple_ is not None and tuple_.get("calibrationId") != cal["id"]:
             add("CALIBRATION_CHANGED", "the calibration changed since arming")
+        if cal is not None and model.safety is not None:
+            # PRD §9.3: a control with no calibrated read-back cannot be a continuous research variable.
+            bound = {c.bind[0] for c in model.controls.values()
+                     if c.bind and c.minimum is not None and c.bind[0] in model.safety.channels}
+            uncovered = sorted(bound - set(json.loads(cal["channels_json"])))
+            if uncovered:
+                add("CALIBRATION_INCOMPLETE", "no calibration for " + ", ".join(uncovered))
         if not fixture["health_json"] or not fixture["health_at"]:
             add("BENCH_HEALTH_UNKNOWN", "the bench has not reported its health")
             return reasons
@@ -359,10 +366,14 @@ class Backend:
         if health["tripActive"]:
             add("TRIP_ACTIVE", "an unresolved trip is active")
         expected_dut = model.setup.get("firmwareSha256")
-        if expected_dut and health.get("dutFirmwareSha256") != expected_dut:
+        if not expected_dut:
+            add("DUT_FIRMWARE_UNSPECIFIED", "the contract does not name the DUT firmware (setup.firmwareSha256)")
+        elif health.get("dutFirmwareSha256") != expected_dut:
             add("DUT_FIRMWARE_MISMATCH", "the DUT firmware does not match the contract")
         approved_mcu = fixture["approved_mcu_firmware_sha256"]
-        if approved_mcu and health.get("mcuFirmwareSha256") != approved_mcu:
+        if not approved_mcu:
+            add("MCU_FIRMWARE_UNAPPROVED", "the fixture has no approved test-controller firmware hash")
+        elif health.get("mcuFirmwareSha256") != approved_mcu:
             add("MCU_FIRMWARE_MISMATCH", "the test-controller firmware is not the approved one")
         if tuple_ is not None:
             for key, code in (("dutFirmwareSha256", "DUT_FIRMWARE_CHANGED"), ("mcuFirmwareSha256", "MCU_FIRMWARE_CHANGED")):
@@ -499,6 +510,9 @@ class Backend:
         if not summary["approved"]:
             add("CONTRACT_NOT_APPROVED", f"contract has {len(summary['approvedBy'])} of "
                                          f"{summary['approvalsRequired']} required approvals")
+        for key, code in (("fixture", "FIXTURE_UNSPECIFIED"), ("fixtureRev", "FIXTURE_REVISION_UNSPECIFIED")):
+            if not raw_setup.get(key):   # PRD §9.3: identity must be checked, so it must be stated
+                add(code, f"the contract does not name setup.{key}, so the setup cannot be checked")
         if raw_setup.get("fixture") not in (None, fixture["id"]):
             add("FIXTURE_ID_MISMATCH", f"the contract is for fixture {raw_setup.get('fixture')}, not {fixture['id']}")
         if raw_setup.get("fixtureRev") not in (None, fixture["revision"]):

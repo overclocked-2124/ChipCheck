@@ -11,9 +11,9 @@ export type Condition = { id: string; label: string; status: ConditionStatus; me
 type Def = { id: string; label: string; codes: string[] };
 const DEFS: Def[] = [
   { id: "contract", label: "Contract version is approved and immutable", codes: ["CONTRACT_NOT_APPROVED"] },
-  { id: "fixture", label: "Fixture identity and revision match the contract", codes: ["FIXTURE_ID_MISMATCH", "FIXTURE_REVISION_MISMATCH", "CAPABILITY_MISSING"] },
-  { id: "firmware", label: "DUT and test-controller firmware match approved values", codes: ["DUT_FIRMWARE_MISMATCH", "MCU_FIRMWARE_MISMATCH", "DUT_FIRMWARE_CHANGED", "MCU_FIRMWARE_CHANGED"] },
-  { id: "calibration", label: "Calibration is present and current", codes: ["CALIBRATION_MISSING", "CALIBRATION_EXPIRED", "CALIBRATION_CHANGED"] },
+  { id: "fixture", label: "Fixture identity and revision match the contract", codes: ["FIXTURE_ID_MISMATCH", "FIXTURE_REVISION_MISMATCH", "CAPABILITY_MISSING", "FIXTURE_UNSPECIFIED", "FIXTURE_REVISION_UNSPECIFIED"] },
+  { id: "firmware", label: "DUT and test-controller firmware match approved values", codes: ["DUT_FIRMWARE_MISMATCH", "MCU_FIRMWARE_MISMATCH", "DUT_FIRMWARE_CHANGED", "MCU_FIRMWARE_CHANGED", "DUT_FIRMWARE_UNSPECIFIED", "MCU_FIRMWARE_UNAPPROVED"] },
+  { id: "calibration", label: "Calibration is present and current", codes: ["CALIBRATION_MISSING", "CALIBRATION_EXPIRED", "CALIBRATION_CHANGED", "CALIBRATION_INCOMPLETE"] },
   { id: "adapters", label: "Required adapters report compatible capabilities", codes: ["ADAPTER_INCOMPATIBLE"] },
   { id: "outputs", label: "Programmable outputs report shutdown state", codes: ["OUTPUTS_ENERGIZED"] },
   { id: "estop", label: "E-stop is released", codes: ["ESTOP_PRESSED"] },
