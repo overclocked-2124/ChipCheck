@@ -607,7 +607,8 @@ class McuEmulator:
         if oled_mv >= 2900 and self.dut_link_ok:
             index = min(60, max(0, round((oled_mv / 1000.0 - 3.00) / 0.01)))
             conditions = {"oledRailV": round(3.00 + 0.01 * index, 2), "redLed": plan.red_led,
-                          "greenLed": plan.green_led, "workload": m.WORKLOAD_NAMES[plan.workload]}
+                          "greenLed": plan.green_led, "workload": m.WORKLOAD_NAMES[plan.workload],
+                          "dwellMs": plan.dwell_ms}
             episode = ApprovedEpisode(episode_id=str(self.episode_tag), attempt=plan.attempt,
                                       contract_hash="", fixture_id=self.cfg.fixture_id, conditions=conditions,
                                       duration_ms=plan.dwell_ms, seed=plan.episode_seed)

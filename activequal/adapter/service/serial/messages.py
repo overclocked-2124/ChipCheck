@@ -13,7 +13,7 @@ Host -> MCU (type = u8)::
     0x03 SET_LIMITS  max_episode_ms u32 | count u8 | count x LIMIT        (5+13n)
                      LIMIT = channel u8 | max_mv u32 | max_ua u32 | slew_max_mv_per_s u32
     0x04 LOAD_PLAN   workload u8 | red u8 | green u8 | flash_offset_ms u16 | dwell_ms u32 |
-                     observe_delay_ms u32 | episode_seed u32 | attempt u16   (20)
+                     observe_delay_ms u32 | episode_seed u32 | attempt u16   (19)
     0x05 SET_RAIL    channel u8 | target_mv u32 | slew_mv_per_s u32        (9)
     0x06 ENABLE_RAIL channel u8                                           (1)
     0x07 DISABLE_RAIL channel u8                                          (1)

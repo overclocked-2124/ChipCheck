@@ -173,9 +173,10 @@ class SerialBenchAdapter:
     # ------------------------------------------------------------------------------------ transport
 
     def _next_seq(self) -> int:
-        seq = self._seq
-        self._seq = (self._seq + 1) & 0xFFFF
-        return seq
+        with self._lock:                 # the emergency path draws from the same counter on another thread
+            seq = self._seq
+            self._seq = (self._seq + 1) & 0xFFFF
+            return seq
 
     def _write(self, data: bytes) -> None:
         try:

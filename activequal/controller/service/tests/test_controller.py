@@ -1,3 +1,4 @@
+import time
 import dataclasses
 import json
 import tempfile
@@ -170,6 +171,23 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual((report.status, report.verdict["outcome"]), (ctl.CUTOFF, "SAFETY_ABORT"))
         self.assertIn("host check: current on supply.ch2", report.verdict["reason"])
         self.assertEqual(env.world.view()["state"], "LOCKED_OUT")
+
+    def test_an_episode_that_overruns_its_time_limit_is_cut_off(self):
+        env = self.env("B3")
+        env.world.submit(0)
+        real_claim, real_run = env.client.claim, env.adapter.apply_and_measure
+
+        def short_claim(instance):
+            claim = real_claim(instance)
+            return None if claim is None else {**claim, "maxEpisodeS": 0.1}
+
+        def slow(episode):
+            time.sleep(1.0)
+            return real_run(episode)
+        env.client.claim, env.adapter.apply_and_measure = short_claim, slow
+        report = env.controller.run_once()
+        self.assertEqual(report.verdict["outcome"], "SAFETY_ABORT")
+        self.assertIn("exceeded", report.verdict["reason"])
 
     def test_preflight_rejects_a_claim_the_safety_rules_do_not_accept(self):
         env = self.env("B3")

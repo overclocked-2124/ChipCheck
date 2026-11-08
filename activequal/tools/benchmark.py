@@ -158,7 +158,11 @@ def summarize(found: list[int | None], budget: int, checkpoints: tuple[int, ...]
         rates[str(point)] = {"discovered": hits, "rate": hits / n if n else 0.0, "ci95": [low, high]}
     # Median over all campaigns with undiscovered ones as censored at the budget; None if fewer than half found.
     discovered = sorted(item for item in found if item is not None)
-    median = statistics.median(discovered) if n and len(discovered) * 2 > n else None
+    # Censored median: misses sit above every find (at the budget), so take the median of the full list
+    # with misses placed last; it is defined only when that median falls on finds (PRD §21.7).
+    ordered = discovered + [math.inf] * (n - len(discovered))
+    median = statistics.median(ordered) if n else None
+    median = median if median is not None and math.isfinite(median) else None
     return {"campaigns": n, "budget": budget, "discovery": rates, "medianEpisodesToFirstFailure": median,
             "medianAmongDiscovered": statistics.median(discovered) if discovered else None}
 

@@ -19,6 +19,8 @@ from activequal.service.backend import ROLE_DISCOVERY, Backend
 from activequal.service.states import CampaignState
 
 REPORT_SCHEMA = "activequal.report/1"
+# States a campaign stops in. LOCKED_OUT can later return to DRAFT; a report taken then records the lockout
+# as it stood, and a later export records what followed.
 TERMINAL_STATES = frozenset({"COMPLETED", "ABORTED", "LOCKED_OUT"})
 CAMPAIGN_STATES = frozenset(s.value for s in CampaignState)
 
@@ -213,7 +215,8 @@ def build_report(backend: Backend, campaign_id: str) -> dict[str, Any]:
         "candidatesRejected": {
             "count": len(rejected), "candidateIds": [r["candidateId"] for r in rejected],
             "byCode": _count([v["code"] for r in rejected for v in r["violations"]]),
-            "note": "refused by the safety rules before any hardware was touched; no episode exists and no budget was spent"},
+            "note": "refused before any hardware was touched (safety rules, or BUDGET_EXHAUSTED when a pool was "
+                    "already spent); no episode exists and no budget was spent"},
     }
 
     # ----- budget and use per pool
