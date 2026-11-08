@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
+import { parseLocal } from "@/lib/datetime";
+import { DateTimeField } from "@/components/controls";
 import { api, useLoad } from "@/components/api";
 import { BenchStatusPanel } from "@/components/fixture-panel";
 import { CopyBox, ErrorBox, KeyValues, Loading, Mono, Notice, PageHeading, PassphraseModal, Section, type PassphraseRequest } from "@/components/ui";
@@ -39,7 +41,7 @@ export default function FixturePage() {
       channels[r.channel.trim()] = { gain, offset, uncertainty };
     }
     const until = new Date(validUntil);
-    if (!validUntil || Number.isNaN(until.getTime())) { setCalError({ code: "INVALID_ARGUMENT", status: 400, message: "Choose when this calibration stops being valid." }); return; }
+    if (!parseLocal(validUntil) || Number.isNaN(until.getTime())) { setCalError({ code: "INVALID_ARGUMENT", status: 400, message: "Choose when this calibration stops being valid." }); return; }
     const res = await api<{ calibrationId: string }>(path.calibrations(id), { body: { channels, meterIdentity: meter, operator, validUntil: until.toISOString() } });
     if (res.ok) { setCalOk(`Calibration ${res.data.calibrationId} recorded.`); void reload(); } else setCalError(res.error);
   }
@@ -98,7 +100,7 @@ export default function FixturePage() {
           <div className="fields">
             <label>Meter identity<input value={meter} onChange={e => setMeter(e.target.value)} required /></label>
             <label>Operator<input value={operator} onChange={e => setOperator(e.target.value)} required /></label>
-            <label>Valid until<input type="datetime-local" value={validUntil} onChange={e => setValidUntil(e.target.value)} required /></label>
+            <DateTimeField label="Valid until" value={validUntil} onChange={setValidUntil} presets={[{ label: "+30d", days: 30 }, { label: "+90d", days: 90 }]} />
           </div>
           <ErrorBox error={calError} title="Calibration not recorded" />
           <div className="card-actions" style={{ marginTop: 6 }}>

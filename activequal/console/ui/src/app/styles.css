@@ -68,9 +68,8 @@ code, .mono { font-family: var(--mono); font-size: .92em; font-variant-numeric: 
 .brand:hover .brand-mark { border-color: var(--lime); }
 .brand:focus-visible { outline: none; box-shadow: 0 0 0 2px #7fa98699; }
 /* The original mark: a C in a rounded square, with the lime dot sitting on its bottom edge. */
-.brand-mark { position: relative; flex: none; width: 40px; height: 40px; border: 1px solid #7fa986; border-radius: 11px; display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 21px; line-height: 1; transition: border-color 180ms; }
-.brand-mark i { position: absolute; left: 50%; bottom: -4px; width: 7px; height: 7px; margin-left: -3.5px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 2px var(--dark); }
-.brand strong { display: block; font-family: var(--display); font-size: 15px; letter-spacing: .11em; }
+.brand-mark { flex: none; width: 40px; height: 40px; border: 1px solid #7fa986; border-radius: 11px; display: grid; place-items: center; color: #ecf4e9; background: #17322a; transition: border-color 180ms; }
+.brand strong { display: block; font-family: var(--display); font-size: 17px; letter-spacing: -.02em; }
 .brand small { display: block; color: #a4b8ad; font-size: 11px; letter-spacing: .03em; margin-top: 2px; }
 .side-caption { color: #769282; font-size: 10px; font-weight: 700; letter-spacing: .14em; margin: 0 10px 10px; text-transform: uppercase; }
 .side-current { background: var(--dark-2); border: 1px solid var(--dark-line); border-radius: 9px; padding: 11px 13px; transition: border-color 180ms, background-color 180ms; font-size: 13px; font-weight: 600; display: flex; align-items: center; color: #ecf4e9; text-decoration: none; }
@@ -85,7 +84,7 @@ code, .mono { font-family: var(--mono); font-size: .92em; font-variant-numeric: 
 .step-nav a { position: relative; display: flex; align-items: center; border-radius: 8px; color: #aebfb3; text-decoration: none; padding: 10px 10px; font-size: 13px; }
 .step-nav a > span, .step-nav a > b { position: relative; z-index: 1; font-weight: inherit; }
 .step-nav a > span { font-family: var(--display); font-size: 11px; color: #72937e; margin-right: 14px; width: 14px; }
-.step-nav a:hover { background: #1b362d; color: #ecf4e9; }
+.step-nav a:hover { background: #17302a; color: #ecf4e9; }
 .step-nav a.active, .step-nav a.active:hover { background: none; color: #193128; font-weight: 700; }
 .step-nav a.active > span { color: #587744; }
 .step-nav a:focus-visible { outline: none; box-shadow: inset 0 0 0 2px #7fa986; }
@@ -96,18 +95,18 @@ code, .mono { font-family: var(--mono); font-size: .92em; font-variant-numeric: 
 /* ---------------------------------------------------------------- shell: content and top bar */
 .content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .topbar { min-height: 60px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 8px 40px; background: #fbfdf9; position: sticky; top: 0; z-index: 10; }
-.crumbs { font-size: 11px; font-weight: 700; letter-spacing: .12em; color: var(--quiet); text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.crumbs { font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--quiet); text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .crumbs a { color: inherit; text-decoration: none; }
 .crumbs a:hover { color: var(--ink); }
 .topbar-right { display: flex; align-items: center; gap: 14px; flex: none; }
-.status { border: 1px solid #d6e5da; border-radius: 30px; padding: 7px 12px; color: #486354; font-size: 11px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; background: var(--surface); }
+.status { border: 1px solid #d6e5da; border-radius: 30px; padding: 6px 12px; color: #486354; font-size: 11px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; background: var(--surface); }
 .status i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #8fb968; margin-right: 7px; }
 .status.bad { border-color: var(--bad-line); color: var(--bad); background: var(--bad-bg); }
 .status.bad i { background: var(--bad); }
 .namefield { display: flex; align-items: center; gap: 10px; }
-.namefield label { display: flex; flex-direction: row; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--quiet); letter-spacing: .04em; }
-.namefield input { width: 11.5rem; min-height: 36px; padding: 7px 11px; font-size: 12px; }
-.namefield .who { font-size: 11px; color: var(--green-text); font-weight: 700; }
+.namefield label { display: flex; flex-direction: row; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--quiet); }
+.namefield input { width: 9rem; min-height: 32px; padding: 5px 11px; font-size: 12px; border-radius: 30px; background: #fff; }
+.namefield .who { display: none; }
 .namefield .bad-text { font-size: 11px; }
 .banner { padding: 11px 40px; font-weight: 600; font-size: 13px; }
 .banner-bad { background: var(--bad-bg); color: var(--bad); border-bottom: 1px solid var(--bad-line); }
@@ -215,6 +214,7 @@ table.grid tbody tr:last-child > * { border-bottom: 0; }
 table.grid tbody tr { transition: background-color 160ms; }
 table.grid tbody tr:hover { background: #f8fbf6; }
 table.grid tbody th { font-weight: 700; color: var(--ink-2); width: 40%; }
+table.grid td code, table.grid td a, table.grid td .badge, table.grid td.num, table.grid th { white-space: nowrap; overflow-wrap: normal; }
 table.grid td.num, table.grid .mono-cell { font-family: var(--mono); font-size: 11px; }
 table.grid input { min-height: 38px; padding: 8px 10px; }
 .kv { display: grid; gap: 0 26px; margin: 0; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
@@ -347,3 +347,5 @@ pre.report { white-space: pre-wrap; max-height: 30rem; overflow: auto; font-fami
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .field.compact { flex-wrap: wrap; }
 }
+.grid2.split { grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); }
+@media (min-width: 1100px) { .grid2.split { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); } }

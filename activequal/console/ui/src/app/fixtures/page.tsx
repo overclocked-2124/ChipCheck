@@ -45,6 +45,7 @@ export default function FixturesPage() {
     <>
       <PageHeading eyebrow="Configure" step="Fixtures" title="Fixtures and calibration"
         intro="A fixture is one physical bench and its wiring. Register it once, record a calibration against a trusted meter, and keep its health current." />
+      <div className="grid2 split">
       <Section title="Fixtures" id="list" index={1} tag={`${fixtures.data?.fixtures.length ?? 0} registered`}>
         {fixtures.loading ? <Loading what="fixtures" /> : null}
         <ErrorBox error={fixtures.error} title="Could not list fixtures" />
@@ -67,6 +68,14 @@ export default function FixturesPage() {
           </table></div>
         ) : null}
       </Section>
+      <Section title="Open a fixture" id="open" index={3} tag="By id">
+        <form className="row openform" onSubmit={e => { e.preventDefault(); if (openId.trim()) router.push(`/fixtures/${encodeURIComponent(openId.trim())}`); }}>
+          <label style={{ flex: 1 }}>Fixture id<input value={openId} onChange={e => setOpenId(e.target.value)} required placeholder="bench-A" /></label>
+          <button type="submit">Open <span className="arrow" aria-hidden="true">→</span></button>
+        </form>
+        {recents.length ? <p className="hint">Recently used on this browser: {recents.map(r => <span key={r}><Link href={`/fixtures/${encodeURIComponent(r)}`}>{r}</Link>{" "}</span>)}</p> : null}
+      </Section>
+      </div>
       <Section title="Register a fixture" id="register" index={2} tag="Reviewer">
         <form onSubmit={e => { e.preventDefault(); register(); }}>
           <div className="fields">
@@ -90,13 +99,6 @@ export default function FixturesPage() {
               <Link href={`/fixtures/${encodeURIComponent(token.fixtureId)}`}>Open the fixture page</Link></p>
           </Notice>
         ) : null}
-      </Section>
-      <Section title="Open a fixture" id="open" index={3} tag="By id">
-        <form className="row openform" onSubmit={e => { e.preventDefault(); if (openId.trim()) router.push(`/fixtures/${encodeURIComponent(openId.trim())}`); }}>
-          <label style={{ flex: 1 }}>Fixture id<input value={openId} onChange={e => setOpenId(e.target.value)} required placeholder="bench-A" /></label>
-          <button type="submit">Open <span className="arrow" aria-hidden="true">→</span></button>
-        </form>
-        {recents.length ? <p className="hint">Recently used on this browser: {recents.map(r => <span key={r}><Link href={`/fixtures/${encodeURIComponent(r)}`}>{r}</Link>{" "}</span>)}</p> : null}
       </Section>
       {modal ? <PassphraseModal request={modal} onClose={() => setModal(null)} /> : null}
     </>

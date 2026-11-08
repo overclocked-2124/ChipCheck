@@ -4,9 +4,11 @@
 // instead of browser spinners, and a tooltip. Styles live in controls.css.
 
 import * as RSelect from "@radix-ui/react-select";
+import * as RPopover from "@radix-ui/react-popover";
 import * as RTooltip from "@radix-ui/react-tooltip";
-import { CaretDown, Check, Minus, Plus } from "@phosphor-icons/react";
-import { useId, type ReactNode } from "react";
+import { CalendarBlank, CaretDown, CaretLeft, CaretRight, Check, Minus, Plus } from "@phosphor-icons/react";
+import { useId, useState, type ReactNode } from "react";
+import { formatLocal, monthGrid, parseLocal } from "@/lib/datetime";
 import { numberProblem, stepNumber, type NumberRule } from "@/lib/number";
 
 export type Option = { value: string; label: ReactNode; hint?: ReactNode; disabled?: boolean };
@@ -95,3 +97,68 @@ export function Tip({ content, children }: { content: ReactNode; children: React
     </RTooltip.Root>
   );
 }
+
+// ---------------------------------------------------------------- date and time
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const same = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+/** Typed or picked local date and time. Replaces the browser's dark native picker, which cannot be themed. */
+export function DateTimeField({ label, value, onChange, presets }: {
+  label: ReactNode; value: string; onChange: (v: string) => void; presets?: { label: string; days: number }[];
+}) {
+  const auto = useId();
+  const parsed = parseLocal(value);
+  const [open, setOpen] = useState(false);
+  const [view, setView] = useState(() => parsed ?? new Date());
+  const today = new Date();
+  const base = parsed ?? new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0);
+  const pick = (d: Date) => onChange(formatLocal(new Date(d.getFullYear(), d.getMonth(), d.getDate(), base.getHours(), base.getMinutes())));
+  const setTime = (h: number, m: number) => onChange(formatLocal(new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, m)));
+  const bad = value.trim() !== "" && !parsed;
+  return (
+    <div className="field">
+      <label htmlFor={auto}>{label}</label>
+      <RPopover.Root open={open} onOpenChange={o => { setOpen(o); if (o) setView(parsed ?? new Date()); }}>
+        <RPopover.Anchor asChild>
+          <div className={`numbox${bad ? " invalid" : ""}`}>
+            <input id={auto} type="text" value={value} placeholder="YYYY-MM-DDTHH:mm" autoComplete="off" spellCheck={false}
+              aria-invalid={bad} style={{ textAlign: "left", paddingLeft: 13 }} onChange={e => onChange(e.target.value)} />
+            <RPopover.Trigger asChild>
+              <button type="button" className="step" aria-label="Open the calendar" style={{ borderLeft: "1px solid var(--line-soft)" }}><CalendarBlank size={16} /></button>
+            </RPopover.Trigger>
+          </div>
+        </RPopover.Anchor>
+        {bad ? <small className="field-error">Use YYYY-MM-DDTHH:mm, for example 2026-12-31T18:00</small> : null}
+        <RPopover.Portal>
+          <RPopover.Content className="select-content datepop" side="top" sideOffset={6} align="end" collisionPadding={12}>
+            <div className="cal-head">
+              <button type="button" className="step" aria-label="Previous month" onClick={() => setView(new Date(view.getFullYear(), view.getMonth() - 1, 1))}><CaretLeft size={14} weight="bold" /></button>
+              <strong>{MONTHS[view.getMonth()]} {view.getFullYear()}</strong>
+              <button type="button" className="step" aria-label="Next month" onClick={() => setView(new Date(view.getFullYear(), view.getMonth() + 1, 1))}><CaretRight size={14} weight="bold" /></button>
+            </div>
+            <div className="cal-grid" role="grid">
+              {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map(d => <span key={d} className="cal-dow">{d}</span>)}
+              {monthGrid(view.getFullYear(), view.getMonth()).flat().map(d => (
+                <button type="button" key={d.getTime()} className={`cal-day${d.getMonth() !== view.getMonth() ? " out" : ""}${parsed && same(d, parsed) ? " sel" : ""}${same(d, today) ? " today" : ""}`}
+                  onClick={() => pick(d)}>{d.getDate()}</button>
+              ))}
+            </div>
+            <div className="cal-time">
+              <span>Time</span>
+              <input aria-label="Hour" inputMode="numeric" value={pad2(base.getHours())} onChange={e => { const h = Number(e.target.value.replace(/\D/g, "").slice(-2)); if (h < 24) setTime(h, base.getMinutes()); }} />
+              <b>:</b>
+              <input aria-label="Minute" inputMode="numeric" value={pad2(base.getMinutes())} onChange={e => { const m = Number(e.target.value.replace(/\D/g, "").slice(-2)); if (m < 60) setTime(base.getHours(), m); }} />
+            </div>
+            <div className="cal-foot">
+              {(presets ?? []).map(p => <button type="button" key={p.label} className="secondary" onClick={() => { const d = new Date(); d.setDate(d.getDate() + p.days); onChange(formatLocal(new Date(d.getFullYear(), d.getMonth(), d.getDate(), 18, 0))); setOpen(false); }}>{p.label}</button>)}
+              <button type="button" className="text" onClick={() => { onChange(""); setOpen(false); }}>Clear</button>
+              <button type="button" onClick={() => setOpen(false)}>Done</button>
+            </div>
+          </RPopover.Content>
+        </RPopover.Portal>
+      </RPopover.Root>
+    </div>
+  );
+}
+const pad2 = (n: number) => String(n).padStart(2, "0");

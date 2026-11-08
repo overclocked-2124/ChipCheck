@@ -50,6 +50,7 @@ export default function ContractsPage() {
     <>
       <PageHeading eyebrow="Configure" step="Contracts" title="Test contracts"
         intro="The contract defines the controls, limits and requirements of one setup. The planner cannot change it. Every save creates a version; approval is always on the canonical JSON the server stores." />
+      <div className="grid2 split">
       <Section title="Contract versions" id="versions" index={1} tag={`${versions.data?.contracts.length ?? 0} versions`}>
         {versions.loading ? <Loading what="contract versions" /> : null}
         <ErrorBox error={versions.error} title="Could not list contracts" />
@@ -66,6 +67,15 @@ export default function ContractsPage() {
           </table></div>
         ) : null}
       </Section>
+      <Section title="Open a contract version" id="open" index={3} tag="By id">
+        <form className="row openform" onSubmit={e => { e.preventDefault(); if (openId.trim()) router.push(`/contracts/${encodeURIComponent(openId.trim())}/${Number(openVersion) || 1}`); }}>
+          <label style={{ flex: 1 }}>Contract id<input value={openId} onChange={e => setOpenId(e.target.value)} required /></label>
+          <div style={{ width: "9.5rem" }}><NumberField label="Version" value={openVersion} onChange={setOpenVersion} rule={{ integer: true, min: 1 }} /></div>
+          <button type="submit">Open <span className="arrow" aria-hidden="true">→</span></button>
+        </form>
+        {recents.length ? <p className="hint">Recently used on this browser: {recents.map(r => { const [id, v] = r.split("@"); return <span key={r}><Link href={`/contracts/${id}/${v}`}>{r.slice(0, 20)}</Link>{" "}</span>; })}</p> : null}
+      </Section>
+      </div>
       <Section title="Contract editor" id="editor" index={2} tag="HLD 04 §12">
         <div className="stack">
           <div className="fields">
@@ -104,14 +114,6 @@ export default function ContractsPage() {
             </Notice>
           ) : null}
         </div>
-      </Section>
-      <Section title="Open a contract version" id="open" index={3} tag="By id">
-        <form className="row openform" onSubmit={e => { e.preventDefault(); if (openId.trim()) router.push(`/contracts/${encodeURIComponent(openId.trim())}/${Number(openVersion) || 1}`); }}>
-          <label style={{ flex: 1 }}>Contract id<input value={openId} onChange={e => setOpenId(e.target.value)} required /></label>
-          <div style={{ width: "9.5rem" }}><NumberField label="Version" value={openVersion} onChange={setOpenVersion} rule={{ integer: true, min: 1 }} /></div>
-          <button type="submit">Open <span className="arrow" aria-hidden="true">→</span></button>
-        </form>
-        {recents.length ? <p className="hint">Recently used on this browser: {recents.map(r => { const [id, v] = r.split("@"); return <span key={r}><Link href={`/contracts/${id}/${v}`}>{r.slice(0, 20)}</Link>{" "}</span>; })}</p> : null}
       </Section>
     </>
   );

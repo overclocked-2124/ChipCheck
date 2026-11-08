@@ -50,7 +50,7 @@ function NameField() {
   }
   return (
     <form className="namefield" onSubmit={e => { e.preventDefault(); save(); }}>
-      <label>Your name
+      <label><span>Name</span>
         <input value={name} onChange={e => { setName(e.target.value); setInvalid(false); }} onBlur={() => { if (name.trim() && name.trim() !== saved) save(); }}
           placeholder="recorded with every action" autoComplete="name" aria-invalid={invalid} maxLength={60} />
       </label>
@@ -85,8 +85,10 @@ export function Shell({ children }: { children: ReactNode }) {
       <a className="skip" href="#main">Skip to content</a>
       <aside className="sidebar">
         <Link className="brand" href="/" aria-label="ChipCheck console home">
-          <span className="brand-mark" aria-hidden="true">C<i /></span>
-          <div><strong>CHIPCHECK</strong><small>Research console</small></div>
+          <span className="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M10 7v4H7m18 0h-3V7M7 21h3v4m12 0v-4h3M11 11h10v10H11z" /><circle cx="16" cy="16" r="2.2" fill="var(--lime)" stroke="none" /></svg>
+          </span>
+          <div><strong>ChipCheck</strong><small>Research console</small></div>
         </Link>
         <div className="side-caption">Workspace</div>
         <Workspace campaigns={campaigns} needsName={list.error?.code === "UNAUTHENTICATED"} />
