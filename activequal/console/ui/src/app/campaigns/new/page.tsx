@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/components/api";
-import { ErrorBox, Section } from "@/components/ui";
+import { ErrorBox, PageHeading, Section } from "@/components/ui";
 import { PLANNERS, type ApiResult, type CampaignView, type UiError } from "@/lib/types";
 
 export default function NewCampaignPage() {
@@ -33,13 +33,14 @@ export default function NewCampaignPage() {
 
   return (
     <>
-      <h1>New campaign</h1>
-      <Section title="Setup">
-        <form className="stack" onSubmit={e => { e.preventDefault(); void submit(); }}>
+      <PageHeading eyebrow="Configure" step="New campaign" title="Start a campaign"
+        intro="Pick an approved contract, the fixture it runs on, a planner and its budgets. Nothing reaches the bench until you validate, arm and start." />
+      <Section title="Setup" index={1} tag="Configuration">
+        <form onSubmit={e => { e.preventDefault(); void submit(); }}>
           <div className="fields">
-            <label>Contract id<input value={contractId} onChange={e => setContractId(e.target.value)} required /></label>
+            <label className="wide">Contract id<input value={contractId} onChange={e => setContractId(e.target.value)} required placeholder="from the Contracts page" /></label>
             <label>Contract version<input type="number" min={1} value={version} onChange={e => setVersion(e.target.value)} required /></label>
-            <label>Fixture id<input value={fixtureId} onChange={e => setFixtureId(e.target.value)} required /></label>
+            <label>Fixture id<input value={fixtureId} onChange={e => setFixtureId(e.target.value)} required placeholder="bench-A" /></label>
             <label>Planner
               <select value={planner} onChange={e => setPlanner(e.target.value)}>{PLANNERS.filter(p => p !== "manual").map(p => <option key={p}>{p}</option>)}</select>
             </label>
@@ -47,11 +48,14 @@ export default function NewCampaignPage() {
             <label>Discovery episodes<input type="number" min={1} value={discovery} onChange={e => setDiscovery(e.target.value)} required /></label>
             <label>Verification episodes<input type="number" min={0} value={verification} onChange={e => setVerification(e.target.value)} required /></label>
           </div>
-          <div><button type="submit" disabled={busy}>{busy ? "Creating..." : "Create campaign"}</button></div>
+          <ErrorBox error={error} title="Could not create the campaign" />
+          <div className="card-actions">
+            <span className="action-note">Next: validate and arm on the campaign page</span>
+            <button type="submit" disabled={busy}>{busy ? "Creating…" : "Create campaign"} <span className="arrow" aria-hidden="true">→</span></button>
+          </div>
         </form>
-        <ErrorBox error={error} title="Could not create the campaign" />
-        <p className="hint">The contract must be approved and the fixture registered. Budgets are checked against the contract when you validate.</p>
       </Section>
+      <p className="note"><strong>Before you start.</strong> The contract must be approved and the fixture registered with a current calibration. Budgets are checked against the contract when you validate.</p>
     </>
   );
 }

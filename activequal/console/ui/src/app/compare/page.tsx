@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, useLoad } from "@/components/api";
-import { Empty, ErrorBox, Notice, Section } from "@/components/ui";
+import { Empty, ErrorBox, Notice, PageHeading, Section, StateBadge } from "@/components/ui";
 import { compareCampaigns, type Comparison } from "@/lib/results";
 import type { CampaignView, EpisodesResponse, UiError } from "@/lib/types";
 
@@ -37,20 +37,21 @@ export default function ComparePage() {
 
   return (
     <>
-      <h1>Compare campaigns</h1>
+      <PageHeading eyebrow="Research" step="Compare" title="Compare campaigns"
+        intro="Line up campaigns on the same contract to see how many episodes each planner needed before its first failure." />
       <ErrorBox error={list.error ?? error} title="Could not load campaigns" />
-      <Section title="Choose campaigns">
+      <Section title="Choose campaigns" index={1} tag={`${picked.length} selected`}>
         {campaigns.length === 0 ? <Empty>No running or finished campaigns yet.</Empty> : (
-          <ul>{campaigns.map(c => (
-            <li key={c.id}><label><input type="checkbox" checked={picked.includes(c.id)} onChange={() => toggle(c.id)} />{" "}
-              <code>{c.id.slice(0, 12)}</code> {c.planner.method} seed {c.seed} ({c.state})</label></li>
+          <ul className="picklist">{campaigns.map(c => (
+            <li key={c.id}><label className="check"><input type="checkbox" checked={picked.includes(c.id)} onChange={() => toggle(c.id)} />
+              <code>{c.id.slice(0, 12)}</code> <span>{c.planner.method} · seed {c.seed}</span> <StateBadge state={c.state} /></label></li>
           ))}</ul>
         )}
       </Section>
       {result ? (
-        <Section title="Episodes to the first failure">
+        <Section title="Episodes to the first failure" index={2} tag="Censored at budget">
           {result.warnings.map(w => <Notice key={w} tone="warn">{w}</Notice>)}
-          <table className="grid">
+          <div className="table-wrap"><table className="grid">
             <thead><tr><th>Campaign</th><th>Planner</th><th>Seed</th><th>First failure at</th><th>Discovery used</th><th>Verification used</th></tr></thead>
             <tbody>{result.rows.map(r => (
               <tr key={r.campaignId}><td><Link href={`/campaigns/${r.campaignId}/results`}><code>{r.campaignId.slice(0, 12)}</code></Link></td>
@@ -58,7 +59,7 @@ export default function ComparePage() {
                 <td>{r.firstFailureAt ?? `none within ${r.discoveryBudget} (censored)`}</td>
                 <td>{r.discoveryEpisodes} / {r.discoveryBudget}</td><td>{r.verificationUsed}</td></tr>
             ))}</tbody>
-          </table>
+          </table></div>
           <p className="hint">One campaign per planner proves nothing. The statistical comparison (log-rank, HLD 06 §8) is in the exported report.</p>
         </Section>
       ) : null}

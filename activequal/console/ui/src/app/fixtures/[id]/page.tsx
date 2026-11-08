@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { api, useLoad } from "@/components/api";
 import { BenchStatusPanel } from "@/components/fixture-panel";
-import { CopyBox, ErrorBox, KeyValues, Loading, Mono, Notice, PassphraseModal, Section, type PassphraseRequest } from "@/components/ui";
+import { CopyBox, ErrorBox, KeyValues, Loading, Mono, Notice, PageHeading, PassphraseModal, Section, type PassphraseRequest } from "@/components/ui";
 import { path } from "@/lib/client";
 import type { ApiResult, FixtureView, UiError } from "@/lib/types";
 
@@ -56,52 +56,55 @@ export default function FixturePage() {
   const cal = data?.calibration ?? null;
   return (
     <>
-      <h1>Fixture <Mono>{id}</Mono></h1>
-      <p><Link href="/fixtures">All fixtures</Link></p>
+      <PageHeading eyebrow="Fixtures" step="Bench" title={<>Fixture <code>{id}</code></>}
+        intro={<>Health, calibration and the bench token for this fixture. <Link href="/fixtures">All fixtures</Link></>} />
       {loading ? <Loading what="fixture" /> : null}
       <ErrorBox error={error} title="Could not load this fixture" />
       {data ? (
         <div className="grid2">
-          <Section title="Health" id="health"><BenchStatusPanel fixture={data} /></Section>
-          <Section title="Fixture" id="info">
+          <Section title="Health" id="health" index={1} tag="Live"><BenchStatusPanel fixture={data} /></Section>
+          <Section title="Fixture" id="info" index={2} tag={`Revision ${data.revision}`}>
             <KeyValues rows={[["Revision", data.revision], ["Capabilities", data.capabilities.join(", ")], ["Approved test-controller firmware", <Mono key="a">{data.approvedMcuFirmwareSha256 ?? "none set"}</Mono>]]} />
           </Section>
         </div>
       ) : null}
       {data ? (
-        <Section title="Current calibration" id="current">
+        <Section title="Current calibration" id="current" index={3} tag={cal ? "Recorded" : "Missing"}>
           {cal ? (
             <>
               <KeyValues rows={[["Meter", cal.meter], ["Operator", cal.operator], ["Recorded", cal.createdAt], ["Valid until", `${cal.validUntil}${Date.parse(cal.validUntil) <= Date.now() ? "  (EXPIRED)" : ""}`]]} />
-              <table className="grid"><thead><tr><th>Channel</th><th>Gain</th><th>Offset</th><th>Uncertainty (U, k=2)</th></tr></thead>
-                <tbody>{Object.entries(cal.channels).map(([k, v]) => <tr key={k}><td>{k}</td><td>{v.gain}</td><td>{v.offset}</td><td>{v.uncertainty}</td></tr>)}</tbody></table>
+              <div className="table-wrap" style={{ marginTop: 16 }}><table className="grid"><thead><tr><th>Channel</th><th>Gain</th><th>Offset</th><th>Uncertainty (U, k=2)</th></tr></thead>
+                <tbody>{Object.entries(cal.channels).map(([k, v]) => <tr key={k}><td><code>{k}</code></td><td className="num">{v.gain}</td><td className="num">{v.offset}</td><td className="num">{v.uncertainty}</td></tr>)}</tbody></table></div>
             </>
           ) : <p className="bad-text">No calibration recorded. A campaign cannot be armed without one.</p>}
         </Section>
       ) : null}
-      <Section title="Record a calibration" id="calibrate">
+      <Section title="Record a calibration" id="calibrate" index={4} tag="Trusted meter">
         <form className="stack" onSubmit={e => { e.preventDefault(); void saveCalibration(); }}>
-          <table className="grid"><thead><tr><th>Channel</th><th>Gain</th><th>Offset</th><th>Uncertainty U</th></tr></thead>
+          <div className="table-wrap"><table className="grid"><thead><tr><th>Channel</th><th>Gain</th><th>Offset</th><th>Uncertainty U</th></tr></thead>
             <tbody>{rows.map((r, i) => (
               <tr key={i}>
                 {(["channel", "gain", "offset", "uncertainty"] as const).map(k => (
                   <td key={k}><input aria-label={`${k} ${i + 1}`} value={r[k]} onChange={e => setRow(i, { [k]: e.target.value })} /></td>
                 ))}
-              </tr>))}</tbody></table>
-          <div><button type="button" className="secondary" onClick={() => setRows(rs => [...rs, blankRow()])}>Add channel</button></div>
+              </tr>))}</tbody></table></div>
+          <div><button type="button" className="secondary" onClick={() => setRows(rs => [...rs, blankRow()])}>+ Add channel</button></div>
           <div className="fields">
             <label>Meter identity<input value={meter} onChange={e => setMeter(e.target.value)} required /></label>
             <label>Operator<input value={operator} onChange={e => setOperator(e.target.value)} required /></label>
             <label>Valid until<input type="datetime-local" value={validUntil} onChange={e => setValidUntil(e.target.value)} required /></label>
           </div>
-          <div><button type="submit">Record calibration</button></div>
           <ErrorBox error={calError} title="Calibration not recorded" />
+          <div className="card-actions" style={{ marginTop: 6 }}>
+            <span className="action-note">Fit it with the calibration tool, then record the result here.</span>
+            <button type="submit">Record calibration <span className="arrow" aria-hidden="true">→</span></button>
+          </div>
           {calOk ? <Notice tone="ok">{calOk}</Notice> : null}
         </form>
       </Section>
-      <Section title="Bench token (reviewer)" id="token">
+      <Section title="Bench token" id="token" index={5} tag="Reviewer">
         <p className="hint">Use only if the bench token is lost or exposed. The new token is shown once.</p>
-        <button type="button" className="secondary" onClick={rotate}>Rotate bench token</button>
+        <div className="row"><button type="button" className="secondary" onClick={rotate}>Rotate bench token</button></div>
         <ErrorBox error={rotateError} title="Rotation failed" />
         {token ? <Notice tone="warn"><strong>New bench token. It will not be shown again.</strong><CopyBox label="Bench token" value={token} /><button type="button" className="secondary" onClick={() => setToken(null)}>I have copied it; hide it</button></Notice> : null}
       </Section>

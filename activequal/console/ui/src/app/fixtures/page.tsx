@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, recentAdd, recentGet } from "@/components/api";
-import { CopyBox, ErrorBox, Notice, PassphraseModal, Section, type PassphraseRequest } from "@/components/ui";
+import { CopyBox, ErrorBox, Notice, PageHeading, PassphraseModal, Section, type PassphraseRequest } from "@/components/ui";
 import type { ApiResult, UiError } from "@/lib/types";
 
 type Registered = { fixtureId: string; token: string };
@@ -39,16 +39,20 @@ export default function FixturesPage() {
 
   return (
     <>
-      <h1>Fixtures and calibration</h1>
-      <Section title="Register a fixture (reviewer)" id="register">
-        <form className="stack" onSubmit={e => { e.preventDefault(); register(); }}>
+      <PageHeading eyebrow="Configure" step="Fixtures" title="Fixtures and calibration"
+        intro="A fixture is one physical bench and its wiring. Register it once, record a calibration against a trusted meter, and keep its health current." />
+      <Section title="Register a fixture" id="register" index={1} tag="Reviewer">
+        <form onSubmit={e => { e.preventDefault(); register(); }}>
           <div className="fields">
             <label>Fixture id<input value={fixtureId} onChange={e => setFixtureId(e.target.value)} required placeholder="bench-A" /></label>
             <label>Revision<input value={revision} onChange={e => setRevision(e.target.value)} required /></label>
-            <label>Capabilities (adapter targets, comma separated)<input value={capabilities} onChange={e => setCapabilities(e.target.value)} required /></label>
-            <label>Approved test-controller firmware SHA-256 (optional)<input value={mcuSha} onChange={e => setMcuSha(e.target.value)} /></label>
+            <label className="wide">Capabilities (adapter targets, comma separated)<input value={capabilities} onChange={e => setCapabilities(e.target.value)} required /></label>
+            <label className="wide">Approved test-controller firmware SHA-256 (optional)<input value={mcuSha} onChange={e => setMcuSha(e.target.value)} /></label>
           </div>
-          <div><button type="submit">Register (asks for the reviewer passphrase)</button></div>
+          <div className="card-actions">
+            <span className="action-note">Asks for the reviewer passphrase. The bench token is shown once.</span>
+            <button type="submit">Register fixture <span className="arrow" aria-hidden="true">→</span></button>
+          </div>
         </form>
         <ErrorBox error={error} title="Registration failed" />
         {token ? (
@@ -61,10 +65,10 @@ export default function FixturesPage() {
           </Notice>
         ) : null}
       </Section>
-      <Section title="Open a fixture" id="open">
-        <form className="row" onSubmit={e => { e.preventDefault(); if (openId.trim()) router.push(`/fixtures/${encodeURIComponent(openId.trim())}`); }}>
-          <label>Fixture id<input value={openId} onChange={e => setOpenId(e.target.value)} required /></label>
-          <button type="submit">Open</button>
+      <Section title="Open a fixture" id="open" index={2} tag="Health · calibration">
+        <form className="row openform" onSubmit={e => { e.preventDefault(); if (openId.trim()) router.push(`/fixtures/${encodeURIComponent(openId.trim())}`); }}>
+          <label style={{ flex: 1 }}>Fixture id<input value={openId} onChange={e => setOpenId(e.target.value)} required placeholder="bench-A" /></label>
+          <button type="submit">Open <span className="arrow" aria-hidden="true">→</span></button>
         </form>
         {recents.length ? <p className="hint">Recently used on this browser: {recents.map(r => <span key={r}><Link href={`/fixtures/${encodeURIComponent(r)}`}>{r}</Link>{" "}</span>)}</p> : null}
         <p className="hint">The control plane has no fixture list endpoint yet, so fixtures are opened by id.</p>

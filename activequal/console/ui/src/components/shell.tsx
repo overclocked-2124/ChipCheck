@@ -1,11 +1,40 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { useLoad, useNow, useReachability } from "@/components/api";
 import { actorCookie, readActor } from "@/lib/client";
 import { connectionBanner } from "@/lib/live";
 import type { CampaignView } from "@/lib/types";
+
+const NAV: { href: string; label: string }[] = [
+  { href: "/", label: "Campaigns" },
+  { href: "/campaigns/new", label: "New campaign" },
+  { href: "/contracts", label: "Contracts" },
+  { href: "/fixtures", label: "Fixtures" },
+  { href: "/compare", label: "Compare" },
+];
+
+/** Which sidebar entry a path belongs to. Campaign pages (live, results) sit under Campaigns. */
+function section(path: string): string {
+  if (path === "/campaigns/new") return "/campaigns/new";
+  for (const href of ["/contracts", "/fixtures", "/compare"]) if (path.startsWith(href)) return href;
+  return "/";
+}
+
+/** Upper-case breadcrumb from the path: CAMPAIGNS / 01A1BC39-33A / RESULTS. Ids are shortened. */
+function Crumbs({ path }: { path: string }) {
+  const parts = path.split("/").filter(Boolean);
+  const head = NAV.find(n => n.href === section(path))?.label ?? "Campaigns";
+  const rest = (path === "/campaigns/new" ? [] : parts.slice(1)).map(p => decodeURIComponent(p));
+  return (
+    <nav className="crumbs" aria-label="Breadcrumb">
+      <Link href={section(path)}>{head}</Link>
+      {rest.map((p, i) => <span key={i}> / {p.length > 14 ? p.slice(0, 12) : p}</span>)}
+    </nav>
+  );
+}
 
 function NameField() {
   const [name, setName] = useState("");
@@ -23,43 +52,68 @@ function NameField() {
         <input value={name} onChange={e => { setName(e.target.value); setInvalid(false); }} onBlur={() => { if (name.trim() && name.trim() !== saved) save(); }}
           placeholder="recorded with every action" autoComplete="name" aria-invalid={invalid} maxLength={60} />
       </label>
-      {invalid ? <span className="bad-text" role="alert">Letters, digits, space . _ - only</span> : saved ? <span className="hint">Recorded as {saved}</span> : <span className="bad-text">Enter your name to act</span>}
+      {invalid ? <span className="bad-text" role="alert">Letters, digits, space . _ - only</span>
+        : saved ? <span className="who">Recorded as {saved}</span> : <span className="bad-text">Enter your name to act</span>}
     </form>
   );
 }
 
-function Banners() {
-  const reach = useReachability();
-  const now = useNow(1000);
-  const campaigns = useLoad<{ campaigns: CampaignView[] }>("/v1/campaigns", 5000);
-  const locked = campaigns.data?.campaigns.filter(c => c.state === "LOCKED_OUT") ?? [];
-  const banner = connectionBanner(reach.unreachable ? "unreachable" : "live", null, reach.lastOkAt, now);
-  return (
-    <>
-      {banner ? <div className="banner banner-bad" role="alert">{banner}</div> : null}
-      {locked.map(c => (
-        <div key={c.id} className="banner banner-bad" role="alert">
-          Fixture locked out: campaign <Link href={`/campaigns/${c.id}`}>{c.id}</Link> needs a physical inspection and a reviewer reset.{" "}
-          <Link href={`/campaigns/${c.id}#lockout`}>Open the lockout page</Link>
-        </div>
-      ))}
-    </>
-  );
+/** Live campaign count for the sidebar card, with a pulsing dot while anything is running. */
+function Workspace({ campaigns, needsName }: { campaigns: CampaignView[] | null; needsName: boolean }) {
+  const running = campaigns?.filter(c => c.state === "RUNNING") ?? [];
+  const locked = campaigns?.filter(c => c.state === "LOCKED_OUT") ?? [];
+  const target = locked[0] ?? running[0] ?? null;
+  const text = locked.length ? `${locked.length} locked out` : running.length ? `${running.length} running` : "No campaign running";
+  const sub = campaigns === null ? (needsName ? "enter your name to load" : "control plane not reached") : `${campaigns.length} campaign${campaigns.length === 1 ? "" : "s"} in total`;
+  const body = <><span className={`pulse${locked.length ? " bad" : running.length ? "" : " idle"}`} aria-hidden="true" /><span>{text}<small>{sub}</small></span></>;
+  return target ? <Link className="side-current" href={`/campaigns/${target.id}`}>{body}</Link> : <div className="side-current">{body}</div>;
 }
 
-const NAV: [string, string][] = [["/", "Campaigns"], ["/contracts", "Contracts"], ["/fixtures", "Fixtures"], ["/campaigns/new", "New campaign"], ["/compare", "Compare"]];
-
 export function Shell({ children }: { children: ReactNode }) {
+  const path = usePathname() ?? "/";
+  const active = section(path);
+  const reach = useReachability();
+  const now = useNow(1000);
+  const list = useLoad<{ campaigns: CampaignView[] }>("/v1/campaigns", 5000);
+  const campaigns = list.data?.campaigns ?? null;
+  const locked = campaigns?.filter(c => c.state === "LOCKED_OUT") ?? [];
+  const banner = connectionBanner(reach.unreachable ? "unreachable" : "live", null, reach.lastOkAt, now);
   return (
-    <>
+    <div className="shell">
       <a className="skip" href="#main">Skip to content</a>
-      <header className="topbar">
-        <Link href="/" className="brand">ActiveQual</Link>
-        <nav aria-label="Main">{NAV.map(([href, label]) => <Link key={href} href={href}>{label}</Link>)}</nav>
-        <NameField />
-      </header>
-      <Banners />
-      <main id="main">{children}</main>
-    </>
+      <aside className="sidebar">
+        <Link className="brand" href="/" aria-label="ChipCheck console home">
+          <span className="brand-mark" aria-hidden="true">C<span>•</span></span>
+          <div><strong>CHIPCHECK</strong><small>Research console</small></div>
+        </Link>
+        <div className="side-caption">Workspace</div>
+        <Workspace campaigns={campaigns} needsName={list.error?.code === "UNAUTHENTICATED"} />
+        <div className="side-caption flow-caption">Navigate</div>
+        <nav aria-label="Main"><ul className="step-nav">{NAV.map((n, i) => (
+          <li key={n.href}><Link href={n.href} className={active === n.href ? "active" : undefined} aria-current={active === n.href ? "page" : undefined}>
+            <span>{String(i + 1).padStart(2, "0")}</span>{n.label}
+          </Link></li>
+        ))}</ul></nav>
+        <div className="side-foot">Planner proposes, safety approves.<br /><span>The E-stop is always the fastest way to stop the bench.</span></div>
+      </aside>
+      <div className="content">
+        <header className="topbar">
+          <Crumbs path={path} />
+          <div className="topbar-right">
+            <NameField />
+            <span className={`status${reach.unreachable ? " bad" : ""}`} role="status"><i aria-hidden="true" />{reach.unreachable ? "Control plane unreachable" : "Control plane live"}</span>
+          </div>
+        </header>
+        {banner ? <div className="banner banner-bad" role="alert">{banner}</div> : null}
+        {locked.map(c => (
+          <div key={c.id} className="banner banner-bad" role="alert">
+            Fixture locked out: campaign <Link href={`/campaigns/${c.id}`}>{c.id.slice(0, 12)}</Link> needs a physical inspection and a reviewer reset.{" "}
+            <Link href={`/campaigns/${c.id}#lockout`}>Open the lockout page</Link>
+          </div>
+        ))}
+        <main id="main" className="main-inner" tabIndex={-1}>{children}</main>
+        <footer className="content-foot"><div><span>ChipCheck / ActiveQual research console</span><span>Requested ≠ measured</span></div></footer>
+      </div>
+    </div>
   );
 }

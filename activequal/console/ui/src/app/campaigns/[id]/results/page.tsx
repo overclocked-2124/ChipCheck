@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { use, useState } from "react";
 import { api, useLoad } from "@/components/api";
-import { ConditionsTable, Empty, ErrorBox, Loading, Notice, Section, StateBadge } from "@/components/ui";
+import { ConditionsTable, Empty, ErrorBox, Loading, Notice, PageHeading, Section, StateBadge } from "@/components/ui";
 import { formatValue, reproductionText, resultStatement } from "@/lib/results";
 import { OUTCOME_STYLE, UNKNOWN_OUTCOME_STYLE } from "@/lib/series";
 import type { CampaignView, Counterexample, EpisodesResponse, UiError } from "@/lib/types";
@@ -36,52 +36,54 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
 
   return (
     <>
-      <div className="row"><h1>Results for <Link href={`/campaigns/${c.id}`}><code>{c.id.slice(0, 12)}</code></Link></h1><StateBadge state={c.state} /></div>
+      <PageHeading eyebrow="Campaign" step="Results" title={<>Results <code>{c.id.slice(0, 12)}</code><StateBadge state={c.state} /></>}
+        intro={<>Evidence for every episode this campaign ran. <Link href={`/campaigns/${c.id}`}>Back to the live view</Link></>}
+        actions={<button type="button" className="secondary" onClick={() => void exportReport()} disabled={exporting}>{exporting ? "Exporting…" : "Export report"}</button>} />
       <Notice tone={TONE[statement.kind]}>{statement.text}</Notice>
-      <Section title="Counterexamples">
+      <Section title="Counterexamples" index={1} tag={`${counterexamples.length} recorded`}>
         {counterexamples.length === 0 ? <Empty>None recorded.</Empty> : counterexamples.map(cx => (
           <div key={cx.id} className="stack">
-            <p>Original episode <code>{cx.originalEpisodeId.slice(0, 12)}</code>; {reproductionText(cx)}.</p>
+            <p className="hint">Original episode <code>{cx.originalEpisodeId.slice(0, 12)}</code>; {reproductionText(cx)}.</p>
             <h3>Minimized conditions</h3>
             <ConditionsTable conditions={cx.minimized.conditions} />
             <p className="hint">Removed (not needed): {cx.minimized.removed.join(", ") || "none"}. Kept: {cx.minimized.kept.join(", ") || "none"}.</p>
             <h3>Failure boundaries</h3>
-            <table className="grid"><thead><tr><th>Control</th><th>Last failing low</th><th>First passing low</th><th>Last failing high</th><th>First passing high</th></tr></thead><tbody>
+            <div className="table-wrap"><table className="grid"><thead><tr><th>Control</th><th>Last failing low</th><th>First passing low</th><th>Last failing high</th><th>First passing high</th></tr></thead><tbody>
               {Object.entries(cx.intervals.intervals).map(([name, iv]) => (
                 <tr key={name}><th scope="row">{name}</th>
                   <td>{formatValue(iv.sides.low.lastFail)}</td><td>{formatValue(iv.sides.low.firstPass)}</td>
                   <td>{formatValue(iv.sides.high.lastFail)}</td><td>{formatValue(iv.sides.high.firstPass)}</td></tr>
               ))}
-            </tbody></table>
+            </tbody></table></div>
             {cx.intervals.budgetExhausted ? <p className="hint">The verification budget ran out before every boundary was narrowed.</p> : null}
           </div>
         ))}
       </Section>
-      <Section title={`Episodes (${episodes.length})`}>
+      <Section title="Episodes" index={2} tag={`${episodes.length} run`}>
         <div className="table-wrap"><table className="grid">
           <thead><tr><th>Episode</th><th>Role</th><th>Outcome</th><th>Robustness</th><th>Conditions</th></tr></thead>
           <tbody>{episodes.map(e => {
             const style = e.outcome ? OUTCOME_STYLE[e.outcome] ?? UNKNOWN_OUTCOME_STYLE : UNKNOWN_OUTCOME_STYLE;
             return (
               <tr key={e.episodeId}><td><code>{e.episodeId.slice(0, 8)}</code></td><td>{e.role}</td><td>{style.label}</td>
-                <td>{formatValue(e.robustness)}</td>
+                <td className="num">{formatValue(e.robustness)}</td>
                 <td>{Object.entries(e.conditions).map(([k, v]) => `${k}=${formatValue(v)}`).join(", ")}</td></tr>
             );
           })}</tbody>
         </table></div>
       </Section>
-      <Section title="Report and evidence bundle">
-        <button type="button" onClick={() => void exportReport()} disabled={exporting}>{exporting ? "Exporting..." : "Export report and evidence bundle"}</button>
+      <Section title="Report and evidence bundle" index={3} tag="Export">
+        <div className="row"><button type="button" onClick={() => void exportReport()} disabled={exporting}>{exporting ? "Exporting…" : "Export report and evidence bundle"} <span className="arrow" aria-hidden="true">→</span></button></div>
         <ErrorBox error={exportError} title="Export failed" />
         {exported ? (
           <>
-            <p className="hint">Bundle written on the control-plane machine: <code>{exported.bundlePath}</code></p>
+            <p className="hint" style={{ marginTop: 14 }}>Bundle written on the control-plane machine: <code>{exported.bundlePath}</code></p>
             <pre className="report">{exported.markdown}</pre>
           </>
         ) : null}
       </Section>
       {(eps.data?.rejected.length ?? 0) > 0 ? (
-        <Section title={`Rejected candidates (${eps.data!.rejected.length})`}>
+        <Section title="Rejected candidates" index={4} tag={`${eps.data!.rejected.length} counted, none executed`}>
           <ul>{eps.data!.rejected.slice(0, 20).map((r, i) => <li key={i}>{r.violations.map(v => `${v.code}: ${v.message}`).join("; ")}</li>)}</ul>
         </Section>
       ) : null}

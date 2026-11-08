@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { api, useLoad } from "@/components/api";
-import { ErrorBox, KeyValues, Loading, Mono, Notice, PassphraseModal, Section, type PassphraseRequest } from "@/components/ui";
+import { ErrorBox, KeyValues, Loading, Mono, Notice, PageHeading, PassphraseModal, Section, type PassphraseRequest } from "@/components/ui";
 import { controlSummaries } from "@/lib/contractForm";
 import { path } from "@/lib/client";
 import type { ApiResult, ContractDetail, UiError } from "@/lib/types";
@@ -30,13 +30,13 @@ export default function ContractDetailPage() {
 
   return (
     <>
-      <h1>Contract <Mono>{id}</Mono> version {version}</h1>
-      <p><Link href="/contracts">Back to the contract editor</Link></p>
+      <PageHeading eyebrow="Contracts" step={`Version ${version}`} title={<>Contract <code>{id.slice(0, 12)}</code></>}
+        intro={<>Full id <Mono>{id}</Mono>. <Link href="/contracts">Back to the contract editor</Link></>} />
       {loading ? <Loading what="contract" /> : null}
       <ErrorBox error={error} title="Could not load this contract version" />
       {data ? (
         <>
-          <Section title="Approval" id="approval">
+          <Section title="Approval" id="approval" index={1} tag={data.approved ? "Approved" : "Awaiting review"}>
             <KeyValues rows={[
               ["Approvals", <strong key="a">{data.approvedBy.length} of {data.approvalsRequired} approvals{data.approved ? " (approved)" : " (not approved)"}</strong>],
               ["Approved by", data.approvedBy.length ? data.approvedBy.join(", ") : "nobody yet"],
@@ -44,20 +44,22 @@ export default function ContractDetailPage() {
             ]} />
             {done ? <Notice tone="ok">{done}</Notice> : null}
             <ErrorBox error={actionError} title="Approval failed" />
-            <div className="row" style={{ marginTop: ".6rem" }}>
-              <button type="button" onClick={approve} disabled={data.approved}>Approve (reviewer)</button>
-              {data.approved ? <span className="hint">Fully approved. Changing any field creates a new version that needs approval again.</span> : null}
+            <div className="card-actions">
+              {data.approved ? <span className="action-note">Fully approved. Changing any field creates a new version that needs approval again.</span>
+                : <span className="action-note">Asks for the reviewer passphrase.</span>}
+              <button type="button" onClick={approve} disabled={data.approved}>Approve <span className="arrow" aria-hidden="true">→</span></button>
             </div>
           </Section>
-          <Section title="Controls" id="controls">
+          <Section title="Controls" id="controls" index={2} tag="Search domain">
             <div className="table-wrap"><table className="grid">
               <thead><tr><th>Control</th><th>Type</th><th>Range / values</th><th>Nominal</th></tr></thead>
-              <tbody>{controlSummaries(data.contract).map(c => <tr key={c.name}><td>{c.name}</td><td>{c.type}</td><td>{c.range}</td><td>{c.nominal}</td></tr>)}</tbody>
+              <tbody>{controlSummaries(data.contract).map(c => <tr key={c.name}><td><code>{c.name}</code></td><td>{c.type}</td><td className="num">{c.range}</td><td className="num">{c.nominal}</td></tr>)}</tbody>
             </table></div>
           </Section>
-          <Section title="Canonical JSON (the text that is hashed and approved)" id="canonical">
-            <textarea readOnly rows={18} value={JSON.stringify(data.contract)} aria-label="Canonical contract JSON" />
-            <p className="hint">Readable copy:</p>
+          <Section title="Canonical JSON" id="canonical" index={3} tag="Hashed and approved">
+            <p className="hint">This exact text is hashed and approved.</p>
+            <textarea readOnly rows={8} value={JSON.stringify(data.contract)} aria-label="Canonical contract JSON" />
+            <p className="hint" style={{ marginTop: 14 }}>Readable copy:</p>
             <textarea readOnly rows={18} value={JSON.stringify(data.contract, null, 2)} aria-label="Formatted contract JSON" />
           </Section>
         </>

@@ -7,7 +7,8 @@ import type { CampaignAction } from "@/lib/actions";
 import { buildChecklist } from "@/lib/arming";
 import type { ApiResult, CampaignView, FixtureView, Reason } from "@/lib/types";
 
-const MARK = { pass: "OK", fail: "NOT OK", unknown: "?" } as const;
+const MARK = { pass: "✓", fail: "✕", unknown: "?" } as const;
+const SAY = { pass: "OK", fail: "Not OK", unknown: "Unknown" } as const;
 
 /** HLD 03 §6.2: Arm is offered only inside the checklist, and only when every condition passes. */
 export function ArmChecklist({ campaign, fixture, serverReasons, onResult }: {
@@ -18,15 +19,23 @@ export function ArmChecklist({ campaign, fixture, serverReasons, onResult }: {
   const [wiring, setWiring] = useState(false);
   const list = buildChecklist({ campaign, contract: null, fixture, serverReasons, now, wiringConfirmed: wiring });
   return (
-    <Section title="Arming checklist">
-      <ul>{list.conditions.map(c => (
-        <li key={c.id}>{MARK[c.status]} {c.label}{c.messages.length ? `: ${c.messages.join("; ")}` : ""}</li>
+    <Section title="Arming checklist" index={2} tag={list.armable ? "Ready to arm" : "Arm blocked"}>
+      <ul className="checklist">{list.conditions.map(c => (
+        <li key={c.id} className={c.status}>
+          <span className="mark" aria-hidden="true">{MARK[c.status]}</span>
+          <div><strong><span className="sr-only">{SAY[c.status]}: </span>{c.label}</strong>{c.messages.length ? <small>{c.messages.join("; ")}</small> : null}</div>
+        </li>
+      ))}
+      {list.other.map((r, i) => (
+        <li key={`o${i}`} className="fail"><span className="mark" aria-hidden="true">✕</span>
+          <div><strong><span className="sr-only">Not OK: </span><code>{r.code}</code></strong><small>{r.message}</small></div></li>
       ))}</ul>
-      {list.other.length ? <ul>{list.other.map((r, i) => <li key={i}>NOT OK <code>{r.code}</code> {r.message}</li>)}</ul> : null}
-      <label><input type="checkbox" checked={wiring} onChange={e => setWiring(e.target.checked)} />{" "}
-        I checked that the fixture wiring matches the contract</label>
+      <div className="card-actions">
+        <label className="check action-note"><input type="checkbox" checked={wiring} onChange={e => setWiring(e.target.checked)} />
+          I checked that the fixture wiring matches the contract</label>
+        <ActionButton action="arm" campaignId={campaign.id} version={campaign.version} disabled={!list.armable} onResult={onResult} />
+      </div>
       {list.armable ? null : <p className="hint">Arm stays disabled until: {list.blockers.join(" ")}</p>}
-      <div><ActionButton action="arm" campaignId={campaign.id} version={campaign.version} disabled={!list.armable} onResult={onResult} /></div>
     </Section>
   );
 }
@@ -47,11 +56,16 @@ export function ClearLockout({ campaign, onDone }: { campaign: CampaignView; onD
     });
   }
   return (
-    <Section title="Clear the lockout (reviewer)">
-      <label><input type="checkbox" checked={inspected} onChange={e => setInspected(e.target.checked)} />{" "}
-        I inspected the fixture in person and reset the interlock by hand</label>
-      <label>What was found and fixed<input value={note} onChange={e => setNote(e.target.value)} /></label>
-      <div><button type="button" disabled={!inspected || !note.trim()} onClick={open}>Clear lockout (asks for the reviewer passphrase)</button></div>
+    <Section title="Clear the lockout" index={2} tag="Reviewer">
+      <div className="stack">
+        <label className="check"><input type="checkbox" checked={inspected} onChange={e => setInspected(e.target.checked)} />
+          I inspected the fixture in person and reset the interlock by hand</label>
+        <label>What was found and fixed<input value={note} onChange={e => setNote(e.target.value)} /></label>
+      </div>
+      <div className="card-actions">
+        <span className="action-note">Asks for the reviewer passphrase. The campaign returns to DRAFT.</span>
+        <button type="button" disabled={!inspected || !note.trim()} onClick={open}>Clear lockout <span className="arrow" aria-hidden="true">→</span></button>
+      </div>
       {modal ? <PassphraseModal request={modal} onClose={() => setModal(null)} /> : null}
     </Section>
   );
