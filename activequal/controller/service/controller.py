@@ -13,12 +13,13 @@ from __future__ import annotations
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable
 
 from activequal.adapter.service.base import BenchAdapter
 from activequal.adapter.service.types import ApprovedEpisode, BenchHealth, Phase, RawBenchCapture
 from activequal.controller.service.client import BackendClient
+from activequal.controller.service.host_check import host_limit_trips
 from activequal.controller.service.spool import Spool
 from activequal.model.canonical import contract_hash as compute_contract_hash
 from activequal.model.contract import ContractModel, parse_contract
@@ -179,6 +180,12 @@ class Controller:
         trip = None
         if error is not None:
             trip = f"controller error: {error!r}"
+        elif capture is not None and not capture.trip and not capture.cutoff_engaged:
+            exceeded = host_limit_trips(model, capture)
+            if exceeded:
+                self.adapter.emergency_shutdown()
+                capture = replace(capture, trip="; ".join(exceeded), cutoff_engaged=True,
+                                  phases_reached=capture.phases_reached + (Phase.EMERGENCY_CUTOFF.value,))
         phases = [] if capture is None else [p for p in capture.phases_reached if p != Phase.PREFLIGHT.value]
         if capture is None:
             phases = [Phase.EMERGENCY_CUTOFF.value]

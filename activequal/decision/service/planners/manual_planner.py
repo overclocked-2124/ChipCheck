@@ -5,7 +5,7 @@ from typing import Any
 
 import optuna
 
-from activequal.decision.service.domain import Control, InvalidRequest, SearchDomain, canonical, is_forbidden
+from activequal.decision.service.domain import Control, InvalidRequest, SearchDomain
 from activequal.model.values import number
 
 from .plan_support import PlanCollector, grid_value, step_count
@@ -17,7 +17,8 @@ class ManualPlanner:
     """Operator-chosen points (HLD 03 principle 9): validate, keep order, skip executed points.
 
     The planner never approves anything; every point still goes through Backend safety.
-    A candidate matching a forbidden rule is rejected loudly rather than silently dropped.
+    A candidate matching a forbidden rule is passed on, so Backend rejects it and records the reason
+    rather than the planner failing the whole proposal.
     """
 
     name = "manual"
@@ -27,7 +28,7 @@ class ManualPlanner:
         if not isinstance(raw, list) or not raw or len(raw) > MAX_CANDIDATES:
             raise InvalidRequest(f"manual planner needs candidates: a list of 1-{MAX_CANDIDATES} condition objects")
         parsed = [self._validate(domain, item, index) for index, item in enumerate(raw)]
-        collector = PlanCollector(domain, history, count, "MANUAL")
+        collector = PlanCollector(domain, history, count, "MANUAL", keep_forbidden=True)
         reasons: list[str] = []
         for index, conditions in enumerate(parsed):
             if collector.offer(conditions):
@@ -48,8 +49,6 @@ class ManualPlanner:
             raise InvalidRequest(f"{where} is missing controls: {', '.join(missing)}")
         conditions = {name: self._value(control, item[name], f"{where}.{name}")
                       for name, control in domain.controls.items()}
-        if is_forbidden(domain, canonical(domain, conditions)):
-            raise InvalidRequest(f"{where} matches a forbidden combination")
         return conditions
 
     @staticmethod

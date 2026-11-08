@@ -477,6 +477,15 @@ class ResultTests(Case):
         self.assertIsNone(w.claim())
         self.assertEqual(w.backend.episode_history(w.campaign_id)[0]["robustness"], None)
 
+    def test_cutoff_without_a_named_trip_is_still_a_safety_abort(self):
+        w = self.make()
+        w.submit(0)
+        claim = w.claim()
+        w.walk(claim, "PREFLIGHT", "CONFIGURING", "SETTLING", "EXECUTING", "EMERGENCY_CUTOFF")
+        verdict = w.backend.submit_result(w.payload(claim, shutdown=False), "bench-A")
+        self.assertEqual((verdict["outcome"], verdict["state"]), ("SAFETY_ABORT", "FINALIZED"))
+        self.assertEqual(w.view()["state"], "LOCKED_OUT")
+
     def test_trip_claimed_without_cutoff_phase_is_refused(self):
         w = self.make()
         w.submit(0)

@@ -302,6 +302,12 @@ class ManualTests(unittest.TestCase):
         result = self.manual([self.point(), self.point(flashOffsetMs=15)])  # same point once pinned
         self.assertEqual(len(result["tests"]), 1)
 
+    def test_forbidden_point_is_passed_on_for_backend_to_reject(self):
+        forbidden = self.point(workload="flash_write", oledRailV=3.6)
+        result = self.manual([forbidden])
+        self.assertEqual(len(result["tests"]), 1)
+        self.assertEqual(result["tests"][0]["conditions"]["workload"], "flash_write")
+
     def test_validation_errors(self):
         bad = {
             "unknown": self.point(extra=1),
@@ -312,7 +318,6 @@ class ManualTests(unittest.TestCase):
             "bad option": self.point(workload="sleep"),
             "bad bool": self.point(redLed="yes"),
             "bool as number": self.point(dwellMs=True),
-            "forbidden": self.point(workload="flash_write", oledRailV=3.6),
         }
         for label, candidate in bad.items():
             with self.assertRaises(InvalidRequest, msg=label) as ctx:

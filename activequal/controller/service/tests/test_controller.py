@@ -1,3 +1,4 @@
+import dataclasses
 import json
 import tempfile
 import unittest
@@ -92,15 +93,14 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(report.verdict["outcome"], "DUT_FAILURE")
         self.assertEqual(report.verdict["requirements"]["heartbeat"], "FAIL")
 
-    def test_heartbeat_loss_with_a_required_latency_missing_is_invalid_per_hld_03_15_1(self):
-        # HLD 03 §15.1 checks required observations (step 3) before failure rules (step 4), so a dead DUT
-        # that also cannot report OLED latency is INVALID_EXPERIMENT. Whether a valid heartbeat violation
-        # should win is an open question recorded in the review notes.
+    def test_heartbeat_loss_with_a_required_latency_missing_is_still_a_dut_failure(self):
+        # HLD 03 §15.1 step 3a: a valid heartbeat violation stands even though OLED latency is missing.
         env = self.env("B3", fault=FaultInjection(FaultKind.DUT_HEARTBEAT_LOSS))
         env.world.submit(0, {**CANDIDATE, "dwellMs": 2000})
         report = env.controller.run_once()
         self.assertEqual((report.verdict["outcome"], report.verdict["reasonCode"]),
-                         ("INVALID_EXPERIMENT", "MISSING_OBSERVATION"))
+                         ("DUT_FAILURE", "REQUIREMENT_VIOLATED"))
+        self.assertIn("missing", report.verdict["reason"])
 
     def test_after_a_cutoff_the_bench_claims_nothing_until_reset(self):
         env = self.env("B3", fault=FaultInjection(FaultKind.ESTOP, Phase.EXECUTING, episode_ids=None))
@@ -156,6 +156,20 @@ class ControllerTests(unittest.TestCase):
         self.assertIn("usb unplugged", report.verdict["reason"])
         self.assertEqual(env.world.view()["state"], "LOCKED_OUT")
         self.assertFalse(env.adapter.health_check().ok)
+
+    def test_host_check_turns_an_over_limit_reading_into_a_safety_abort(self):
+        env = self.env("B3")
+        env.world.submit(0)
+        real = env.adapter.apply_and_measure
+
+        def over_current(episode):
+            capture = real(episode)
+            return dataclasses.replace(capture, measured_current_a={**capture.measured_current_a, "oledRailA": 0.35})
+        env.adapter.apply_and_measure = over_current
+        report = env.controller.run_once()
+        self.assertEqual((report.status, report.verdict["outcome"]), (ctl.CUTOFF, "SAFETY_ABORT"))
+        self.assertIn("host check: current on supply.ch2", report.verdict["reason"])
+        self.assertEqual(env.world.view()["state"], "LOCKED_OUT")
 
     def test_preflight_rejects_a_claim_the_safety_rules_do_not_accept(self):
         env = self.env("B3")

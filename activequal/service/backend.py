@@ -16,7 +16,7 @@ import os
 import secrets
 import sqlite3
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable
@@ -994,6 +994,9 @@ class Backend:
             if canonical_json(result.requested) != canonical_json(json.loads(episode["requested_json"])):
                 raise BackendError("INTEGRITY_ERROR", "requested conditions differ from the approved episode")
             state = E(episode["state"])
+            if not result.safety_trip and state in (E.EMERGENCY_CUTOFF, E.LOCKOUT):
+                # The bench reached cutoff but named no trip: still a safety abort, never a pass (HLD 03 §15.1 step 1).
+                result = replace(result, safety_trip=f"cutoff reached without a reported trip ({state.value})")
             if result.safety_trip:
                 if state not in (E.EMERGENCY_CUTOFF, E.LOCKOUT):
                     raise precondition("a safety trip is reported but the episode never reached cutoff", state=state.value)
@@ -1018,6 +1021,10 @@ class Backend:
             for trace in result.traces:
                 conn.execute("UPDATE traces SET episode_id = ? WHERE sha256 = ? AND episode_id IS NULL",
                              (episode["id"], trace["sha256"]))
+            if state is E.EMERGENCY_CUTOFF:       # HLD 03 §8: a cutoff always passes through LOCKOUT
+                self._move_episode(conn, episode, E.LOCKOUT, actor=SYSTEM_ACTOR, reason_code="SAFETY_TRIP",
+                                   reason=result.safety_trip or "cutoff")
+                episode = self._episode(conn, episode["id"])
             if state is E.SHUTTING_DOWN:
                 self._move_episode(conn, episode, E.SUBMITTING, actor=SYSTEM_ACTOR, reason_code="EVIDENCE_RECEIVED",
                                    reason="result payload accepted")

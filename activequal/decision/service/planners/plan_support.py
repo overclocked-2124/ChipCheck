@@ -43,8 +43,10 @@ def discrete_values(control: Control) -> list[Any]:
 class PlanCollector:
     """Accepts planned points in order, dropping forbidden, executed and duplicate ones."""
 
-    def __init__(self, domain: SearchDomain, history: list[EpisodeRecord], count: int, code: str) -> None:
+    def __init__(self, domain: SearchDomain, history: list[EpisodeRecord], count: int, code: str, *,
+                 keep_forbidden: bool = False) -> None:
         self.domain, self.count, self.code = domain, count, code
+        self.keep_forbidden = keep_forbidden    # manual: let Backend reject and record it (HLD 03 principle 9)
         self.seen = executed_keys(history)
         self.items: list[dict[str, Any]] = []
 
@@ -55,7 +57,7 @@ class PlanCollector:
     def offer(self, conditions: dict[str, Any]) -> bool:
         pinned = canonical(self.domain, conditions)
         key = condition_key(pinned)
-        if self.full or key in self.seen or is_forbidden(self.domain, pinned):
+        if self.full or key in self.seen or (not self.keep_forbidden and is_forbidden(self.domain, pinned)):
             return False
         self.seen.add(key)
         self.items.append(pinned)

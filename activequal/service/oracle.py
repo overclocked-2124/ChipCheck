@@ -146,15 +146,18 @@ def classify(contract: ContractModel, requested: dict[str, Any], evidence: Evide
                             f"{rule.metric} = {value:g} differs from requested {rule.tracks} = "
                             f"{requested[rule.tracks]:g} by {deviation:g} (tolerance {rule.tolerance:g})")
 
-    # 3. Are all required observations present and trustworthy?
+    # 3. Are all required observations present and trustworthy? A gap is remembered, not returned yet:
+    #    a requirement that a present, valid observation violates beyond the guard band is still a
+    #    DUT failure (HLD 03 §15.1 step 3a), because the missing reading cannot undo it.
+    gap: Verdict | None = None
     for obs in needed:
         if obs.name not in evidence.observations or evidence.observations[obs.name] is None:
-            return _invalid(MISSING_OBSERVATION, f"required observation {obs.name} is missing")
-        if not _usable(evidence.observations[obs.name]):
-            return _invalid(UNTRUSTWORTHY_OBSERVATION, f"observation {obs.name} is not a finite number")
+            gap = gap or _invalid(MISSING_OBSERVATION, f"required observation {obs.name} is missing")
+        elif not _usable(evidence.observations[obs.name]):
+            gap = gap or _invalid(UNTRUSTWORTHY_OBSERVATION, f"observation {obs.name} is not a finite number")
 
     # Requirements the episode exercised; others (e.g. latency while idle) stay out of the minimum.
-    exercised = {obs.name for obs in needed}
+    exercised = {obs.name for obs in needed if _usable(evidence.observations.get(obs.name))}
     margins: dict[str, float] = {}
     violated: list[str] = []
     unsure: list[str] = []
@@ -173,8 +176,11 @@ def classify(contract: ContractModel, requested: dict[str, Any], evidence: Evide
 
     # 4. A reviewed requirement was violated beyond the guard band.
     if violated:
-        return Verdict(DUT_FAILURE, REQUIREMENT_VIOLATED, "requirement violated: " + ", ".join(violated),
+        note = f" ({gap.reason}; the failure stands without it)" if gap else ""
+        return Verdict(DUT_FAILURE, REQUIREMENT_VIOLATED, "requirement violated: " + ", ".join(violated) + note,
                        margins, robustness, tuple(violated), tuple(unsure))
+    if gap is not None:
+        return gap
     # 6. Inside the guard band: neither a pass nor a failure.
     if unsure:
         return Verdict(INVALID_EXPERIMENT, INCONCLUSIVE,

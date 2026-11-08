@@ -438,7 +438,8 @@ Outcome classification occurs only after the required evidence is available or e
 
 1. Did a safety mechanism trigger? If yes, `SAFETY_ABORT`.
 2. Were the requested conditions applied and measured within tolerance? If no, `INVALID_EXPERIMENT`.
-3. Are all required observations present and trustworthy? If no, `INVALID_EXPERIMENT`.
+3. Are all required observations present and trustworthy? If no, `INVALID_EXPERIMENT`, except as in 3a.
+   3a. If a present, trustworthy observation violates a reviewed requirement beyond its guard band, the outcome is `DUT_FAILURE` even when another required observation is missing; the reason names the missing one. A missing reading cannot undo a measured failure (decided 2026-11-08).
 4. Did a reviewed failure rule evaluate true? If yes, `DUT_FAILURE`.
 5. Did all reviewed pass requirements hold? If yes, `PASS`.
 6. Otherwise, `INVALID_EXPERIMENT` with an inconclusive-oracle reason.
