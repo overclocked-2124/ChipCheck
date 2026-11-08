@@ -10,6 +10,7 @@ decision 13).
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -81,10 +82,19 @@ def _sha256(text: str | bytes) -> str:
 
 
 def _limits_signature(model: ContractModel) -> str:
-    """What a reviewer must re-approve: safety limits and every control's range, slew and binding."""
+    """What two reviewers must approve (PRD §28.1): safety limits, every control's range, slew and binding,
+    and everything that decides a verdict (requirements, observation uncertainties, validity tolerances),
+    since a wider guard band can turn a real failure into "inconclusive"."""
     controls = {name: (c.kind, c.minimum, c.maximum, c.step, c.shutdown, c.slew_per_s_max, c.bind, c.unit)
                 for name, c in model.controls.items()}
-    return _json({"controls": controls, "forbidden": model.forbidden, "safety": repr(model.safety)})
+    plain = lambda value: json.loads(json.dumps(value, default=lambda o: dataclasses.asdict(o)))   # noqa: E731
+    return _json({"controls": controls, "forbidden": model.forbidden, "safety": plain(model.safety),
+                  "observations": plain(model.observations), "requirements": plain(model.requirements),
+                  "validity": plain(model.validity)})   # _json sorts keys, so stored and fresh parses compare equal
+
+
+# Campaign states a safety event moves to LOCKED_OUT (HLD 03 §13: every trip leads to lockout).
+LOCKABLE = (C.ARMED, C.RUNNING, C.PAUSING, C.PAUSED, C.ABORTING)
 
 
 class Backend:
@@ -164,8 +174,10 @@ class Backend:
             else:
                 version, previous = last["version"] + 1, last
             # Two people must approve a first version or any change to limits (PRD §28.1, HLD 07 §7).
+            # The comparison is against the newest *approved* version: an unapproved draft never lowers the bar.
             required = 2
-            if previous is not None and _limits_signature(self._model(conn, previous["id"])) == _limits_signature(model):
+            approved = self._latest_approved(conn, contract_key) if previous is not None else None
+            if approved is not None and _limits_signature(self._model(conn, approved["id"])) == _limits_signature(model):
                 required = 1
             row_id = new_id()
             conn.execute(
@@ -185,6 +197,13 @@ class Backend:
         return {"id": row["id"], "contractId": row["contract_key"], "version": row["version"],
                 "contractHash": row["contract_hash"], "approvalsRequired": row["approvals_required"],
                 "approvedBy": approvers, "approved": len(approvers) >= row["approvals_required"]}
+
+    def _latest_approved(self, conn: sqlite3.Connection, contract_key: str) -> sqlite3.Row | None:
+        for row in conn.execute("SELECT * FROM contract_versions WHERE contract_key = ? ORDER BY version DESC",
+                                (contract_key,)).fetchall():
+            if self._contract_summary(conn, row)["approved"]:
+                return row
+        return None
 
     def _contract_row(self, conn: sqlite3.Connection, contract_key: str, version: int) -> sqlite3.Row:
         row = conn.execute("SELECT * FROM contract_versions WHERE contract_key = ? AND version = ?",
@@ -300,8 +319,8 @@ class Backend:
                          (_json(health), self._ts(), fixture_id))
             if health["tripActive"] or not health["estopReleased"]:
                 campaign = conn.execute(
-                    "SELECT * FROM campaigns WHERE fixture_id = ? AND state IN (?,?,?,?)",
-                    (fixture_id, C.ARMED, C.RUNNING, C.PAUSING, C.ABORTING)).fetchone()
+                    f"SELECT * FROM campaigns WHERE fixture_id = ? AND state IN ({','.join('?' * len(LOCKABLE))})",
+                    (fixture_id, *LOCKABLE)).fetchone()
                 if campaign is not None:
                     reason = "trip reported by the bench" if health["tripActive"] else "E-stop pressed"
                     self._lockout(conn, campaign, reason_code="BENCH_REPORTED_TRIP", reason=reason, actor=SYSTEM_ACTOR)
@@ -887,7 +906,11 @@ class Backend:
                             campaign_id=episode["campaign_id"], attempt=lease["attempt"], actor=SYSTEM_ACTOR,
                             reason_code="ABORT_ACKNOWLEDGED", reason="bench confirmed shutdown",
                             contract_hash=lease["contract_hash"], fixture_id=fixture_id, detail={"leaseId": lease_id})
-            campaign = self._settle(conn, self._campaign(conn, episode["campaign_id"]))
+            campaign = self._campaign(conn, episode["campaign_id"])
+            if E(episode["state"]) is E.LOCKOUT and C(campaign["state"]) in LOCKABLE:   # the abort ended in a trip
+                campaign = self._lockout(conn, campaign, reason_code="SAFETY_TRIP", actor=SYSTEM_ACTOR,
+                                         reason="the bench reached cutoff while aborting")
+            campaign = self._settle(conn, campaign)
             return {"campaignState": campaign["state"]}
 
     def reconcile_lease(self, lease_id: str, resolution: str, note: str, actor: Actor) -> dict[str, Any]:
@@ -907,24 +930,37 @@ class Backend:
             conn.execute("UPDATE leases SET state = 'RELEASED' WHERE id = ?", (lease_id,))
             campaign = self._campaign(conn, episode["campaign_id"])
             # Route the episode to a finished state through its legal transitions, then record an INVALID verdict.
-            self._finish_without_evidence(conn, episode, campaign, actor, f"{resolution}: {note.strip()}")
-            if C(self._campaign(conn, campaign["id"])["state"]) in (C.RUNNING, C.PAUSING, C.ABORTING):
+            outcome = self._finish_without_evidence(conn, episode, campaign, actor, f"{resolution}: {note.strip()}")
+            if C(self._campaign(conn, campaign["id"])["state"]) in LOCKABLE:
                 self._lockout(conn, campaign, reason_code="LEASE_LOST",
                               reason="a lease expired; the fixture must be inspected", actor=SYSTEM_ACTOR)
-            return {"episodeId": episode["id"], "outcome": oracle.INVALID_EXPERIMENT}
+            return {"episodeId": episode["id"], "outcome": outcome}
 
     def _finish_without_evidence(self, conn: sqlite3.Connection, episode: sqlite3.Row, campaign: sqlite3.Row,
-                                 actor: Actor, reason: str) -> None:
+                                 actor: Actor, reason: str) -> str:
+        """Finalize an episode whose evidence will never arrive. One that reached cutoff is a safety abort
+        (HLD 03 §15.1 step 1); anything else is an invalid experiment. Returns the outcome."""
         state = E(episode["state"])
-        path = [E.EMERGENCY_CUTOFF, E.LOCKOUT, E.FINALIZED] if state in (
-            E.PREFLIGHT, E.CONFIGURING, E.SETTLING, E.EXECUTING, E.OBSERVING, E.SHUTTING_DOWN) else \
-            [E.PREFLIGHT, E.SHUTTING_DOWN, E.SUBMITTING, E.FINALIZED] if state is E.LEASED else []
+        safety = state in (E.EMERGENCY_CUTOFF, E.LOCKOUT)
+        if state in (E.PREFLIGHT, E.CONFIGURING, E.SETTLING, E.EXECUTING, E.OBSERVING, E.SHUTTING_DOWN):
+            path = [E.EMERGENCY_CUTOFF, E.LOCKOUT, E.FINALIZED]       # physical state unknown: treat as cut off
+        elif state is E.LEASED:
+            path = [E.PREFLIGHT, E.SHUTTING_DOWN, E.SUBMITTING, E.FINALIZED]
+        elif state is E.EMERGENCY_CUTOFF:
+            path = [E.LOCKOUT, E.FINALIZED]
+        elif state in (E.LOCKOUT, E.SUBMITTING, E.EVIDENCE_PENDING):
+            path = [E.FINALIZED]
+        else:
+            path = []
+        outcome = oracle.SAFETY_ABORT if safety else oracle.INVALID_EXPERIMENT
+        code = "SAFETY_TRIP" if safety else "LEASE_RECONCILED"
         for step in path:
             episode = self._episode(conn, episode["id"])
-            extra = {"outcome": oracle.INVALID_EXPERIMENT, "finalized_at": self._ts()} if step is E.FINALIZED else None
+            extra = {"outcome": outcome, "finalized_at": self._ts()} if step is E.FINALIZED else None
             self._move_episode(conn, episode, step, actor=actor, reason_code="RECONCILED", reason=reason, extra=extra)
         conn.execute("INSERT OR REPLACE INTO verdicts VALUES (?,?,?,?,?,?,?,?)",
-                     (episode["id"], oracle.INVALID_EXPERIMENT, "LEASE_RECONCILED", reason, "{}", None, "{}", self._ts()))
+                     (episode["id"], outcome, code, reason, "{}", None, "{}", self._ts()))
+        return outcome
 
     # ------------------------------------------------------------------ traces
 
@@ -1034,8 +1070,7 @@ class Backend:
                                extra={"outcome": verdict.outcome, "finalized_at": now})
             if lease["state"] in ("ACTIVE", "NEEDS_RECONCILIATION"):
                 conn.execute("UPDATE leases SET state = 'RELEASED' WHERE id = ?", (lease["id"],))
-            if (verdict.outcome == oracle.SAFETY_ABORT
-                    and C(self._campaign(conn, campaign["id"])["state"]) in (C.ARMED, C.RUNNING, C.PAUSING, C.ABORTING)):
+            if verdict.outcome == oracle.SAFETY_ABORT and C(self._campaign(conn, campaign["id"])["state"]) in LOCKABLE:
                 self._lockout(conn, campaign, reason_code="SAFETY_TRIP", reason=verdict.reason, actor=SYSTEM_ACTOR)
             self._settle(conn, campaign)
             return self._verdict_view(conn, self._episode(conn, episode["id"]))

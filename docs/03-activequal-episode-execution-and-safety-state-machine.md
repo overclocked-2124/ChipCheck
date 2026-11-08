@@ -122,6 +122,11 @@ stateDiagram-v2
     ABORTING --> ABORTED: Bench confirms shutdown
     RUNNING --> LOCKED_OUT: Safety trip
     ARMED --> LOCKED_OUT: Safety trip
+    PAUSING --> LOCKED_OUT: Safety trip
+    PAUSED --> LOCKED_OUT: Safety trip or E-stop while paused
+    ABORTING --> LOCKED_OUT: Cutoff while aborting
+    PAUSING --> ABORTING: Abort requested
+    PAUSED --> ABORTING: Abort requested
     LOCKED_OUT --> DRAFT: Cause reviewed and manual reset
     READY --> DRAFT: Configuration changed
     COMPLETED --> [*]

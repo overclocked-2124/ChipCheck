@@ -60,10 +60,21 @@ class ContractTests(Case):
         loosened["safety"]["channels"]["supply.ch2"]["maxA"] = 0.3
         v2 = w.backend.create_contract(loosened, SAM, w.contract_key)
         self.assertEqual((v2["version"], v2["approvalsRequired"]), (2, 2))
-        renamed = copy.deepcopy(loosened)
-        renamed["requirements"][0]["limit"] = 119
-        v3 = w.backend.create_contract(renamed, SAM, w.contract_key)
-        self.assertEqual((v3["version"], v3["approvalsRequired"]), (3, 1))
+        budget_only = copy.deepcopy(loosened)                     # v2 was never approved, so v1 is the reference
+        budget_only["campaign"]["budget"] = 70
+        v3 = w.backend.create_contract(budget_only, SAM, w.contract_key)
+        self.assertEqual((v3["version"], v3["approvalsRequired"]), (3, 2))
+        w.backend.approve_contract(w.contract_key, 3, DANA)
+        w.backend.approve_contract(w.contract_key, 3, ALEX)
+        smaller = copy.deepcopy(budget_only)
+        smaller["campaign"]["budget"] = 60
+        self.assertEqual(w.backend.create_contract(smaller, SAM, w.contract_key)["approvalsRequired"], 1)
+        guard = copy.deepcopy(smaller)
+        guard["observations"]["oledLatencyMs"]["uncertainty"] = 200
+        self.assertEqual(w.backend.create_contract(guard, SAM, w.contract_key)["approvalsRequired"], 2)
+        limit = copy.deepcopy(smaller)
+        limit["requirements"][0]["limit"] = 119
+        self.assertEqual(w.backend.create_contract(limit, SAM, w.contract_key)["approvalsRequired"], 2)
 
     def test_invalid_contract_is_rejected(self):
         w = self.make(arm=False)
@@ -350,6 +361,36 @@ class BenchTests(Case):
         w.backend.reconcile_lease(claim["leaseId"], "evidence_lost", "cable pulled", DANA)
         episode = w.backend.get_episode(claim["episodeId"])
         self.assertEqual((episode["state"], episode["outcome"]), ("FINALIZED", "INVALID_EXPERIMENT"))
+        self.assertEqual(w.view()["state"], "LOCKED_OUT")
+
+    def test_reconciling_an_episode_that_reached_cutoff_is_a_safety_abort(self):
+        w = self.make()
+        w.submit(0)
+        claim = w.claim()
+        w.walk(claim, "PREFLIGHT", "CONFIGURING", "SETTLING", "EXECUTING", "EMERGENCY_CUTOFF")
+        w.clock.advance(60)
+        w.backend.expire_leases()
+        result = w.backend.reconcile_lease(claim["leaseId"], "evidence_lost", "controller crashed", DANA)
+        episode = w.backend.get_episode(claim["episodeId"])
+        self.assertEqual((result["outcome"], episode["state"], episode["outcome"]),
+                         ("SAFETY_ABORT", "FINALIZED", "SAFETY_ABORT"))
+        self.assertEqual(w.backend.in_flight_count(w.campaign_id), 0)
+        self.assertEqual(w.view()["state"], "LOCKED_OUT")
+
+    def test_abort_that_ends_in_a_cutoff_locks_out_instead_of_aborting(self):
+        w = self.make()
+        w.submit(0)
+        claim = w.claim()
+        w.walk(claim, "PREFLIGHT", "CONFIGURING", "SETTLING", "EXECUTING")
+        w.backend.abort_campaign(w.campaign_id, w.view()["version"], SAM)
+        w.walk(claim, "EMERGENCY_CUTOFF", "LOCKOUT")
+        self.assertEqual(w.backend.acknowledge_abort(claim["leaseId"], "bench-A")["campaignState"], "LOCKED_OUT")
+
+    def test_trip_while_paused_locks_out(self):
+        w = self.make()
+        view = w.backend.pause_campaign(w.campaign_id, w.version, SAM)
+        self.assertEqual(view["state"], "PAUSED")
+        w.backend.record_bench_health("bench-A", {**GOOD_HEALTH, "estopReleased": False})
         self.assertEqual(w.view()["state"], "LOCKED_OUT")
 
     def test_health_trip_locks_out_an_armed_campaign(self):
