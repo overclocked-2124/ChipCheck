@@ -1,0 +1,380 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[top=1in,bottom=1in,left=1.25in,right=1in]{geometry}
+\usepackage{mathptmx}
+\usepackage[T1]{fontenc}
+\usepackage{xcolor}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{colortbl}
+\usepackage{enumitem}
+\usepackage{setspace}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage[most]{tcolorbox}
+\usepackage{microtype}
+\usepackage{needspace}
+
+\definecolor{navy}{HTML}{1F3864}
+\definecolor{purp}{HTML}{7030A0}
+\definecolor{dred}{HTML}{8B0000}
+\definecolor{azure}{HTML}{1F4FBF}
+\definecolor{gbox}{HTML}{EAF2FA}
+\definecolor{gborder}{HTML}{9AA5B1}
+\definecolor{gtext}{HTML}{595959}
+\definecolor{ghead}{HTML}{F2F2F2}
+\definecolor{covergrey}{HTML}{767171}
+\definecolor{tdark}{HTML}{3A3A3A}
+\definecolor{tblue}{HTML}{1F3864}
+
+\setstretch{1.4}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\pagestyle{empty}
+\setlist{nosep}
+\setlist[itemize]{leftmargin=2.2em,itemsep=2pt}
+
+% Headings
+\titleformat{\section}{\bfseries\Large\color{purp}}{\thesection.}{0.3em}{}
+\titleformat{\subsection}{\bfseries\large\color{navy}}{\thesubsection}{0.4em}{}
+\titlespacing*{\section}{0pt}{14pt}{6pt}
+\titlespacing*{\subsection}{0pt}{10pt}{4pt}
+\newcommand{\redsec}[1]{\section*{\color{dred}#1}\vspace{-4pt}}
+\newcommand{\purpsec}[1]{\section*{\color{purp}#1}}
+\newcommand{\dredrule}{\noindent{\color{dred}\rule{\linewidth}{0.5pt}}\par\vspace{4pt}}
+\newcommand{\bluesub}[1]{\subsection*{\color{azure}#1}}
+\newcommand{\navysub}[1]{\subsection*{\color{navy}#1}}
+\newcommand{\purpsub}[1]{\subsection*{\color{purp}\normalsize #1}}
+
+% Guideline box
+\newtcolorbox{guide}[1]{enhanced,colback=gbox,colframe=gborder,boxrule=0.5pt,arc=0pt,
+  left=6pt,right=6pt,top=3pt,bottom=3pt,
+  fontupper=\itshape\small\color{gtext},before upper={\setstretch{1.15}\setlength{\parskip}{3pt}},
+  title={\color{navy}\bfseries\upshape #1},coltitle=navy,colbacktitle=gbox,
+  attach title to upper={\par},fonttitle=\small}
+
+\setlength{\LTpre}{0pt}\setlength{\LTpost}{0pt}\setlength{\LTleft}{0pt}\setlength{\LTright}{0pt}
+
+\begin{document}
+
+% ---------------- COVER ----------------
+\thispagestyle{empty}
+\begin{center}
+\vspace*{0.6cm}
+{\color{navy}\bfseries\Large Department of Information Science \& Engineering}\\[3.2cm]
+{\itshape\color{gtext}\Large Artificial Intelligence and Machine Learning}\\[0.5cm]
+{\Large IS353IA}\\[1.1cm]
+\end{center}
+
+\noindent\colorbox{covergrey}{\parbox{\dimexpr\linewidth-2\fboxsep\relax}{\centering\vspace{6pt}
+{\color{white}\bfseries\LARGE PROJECT SYNOPSIS}\\[4pt]
+{\color{white}\small Lab -- Part B}\vspace{8pt}}}\\[-1pt]
+\renewcommand{\arraystretch}{1.75}
+\setlength{\parskip}{0pt}
+{\setlength{\fboxrule}{0.4pt}\noindent\hspace{-0pt}\begin{tabular}{|>{\columncolor{ghead}\raggedright\arraybackslash\bfseries\small}p{\dimexpr0.31\linewidth-12.4pt\relax}|p{\dimexpr0.69\linewidth-12.8pt\relax}|}
+\hline
+Title of Project: & \\ \cline{2-2}
+Student Name(s): & \\ \cline{2-2}
+USN / Reg. No.: & \\ \cline{2-2}
+Semester and Section: & \\ \cline{2-2}
+Lab Batch: & \\ \cline{2-2}
+Date of Submission: & \color{gtext}\itshape / \\ \hline
+\end{tabular}}
+
+\vspace{2.2cm}
+\begin{center}{\itshape\color{gtext}\small Academic Year:}\end{center}
+\newpage
+
+\setcounter{page}{1}
+\pagestyle{empty}
+
+% ---------------- 1. ABSTRACT ----------------
+\purpsec{1. Abstract}
+\dredrule
+\begin{guide}{Guidelines:}
+Write 200--300 words.\par
+Cover: problem being solved, proposed approach, methodology, expected outcome.\par
+Must be self-contained --- a reader unfamiliar with your work should understand it.\par
+No citations or references in the abstract.\par
+Avoid acronyms unless defined on first use.
+\end{guide}
+
+[Write a concise overview of the proposed project here. Summarize the problem, the proposed solution, the methodology to be followed, tools/technologies involved, and the expected outcomes or contributions. Do NOT copy from existing papers. Keep it original and specific to your work.]
+
+\textbf{Keywords:} {\itshape\color{gtext}[5--7 relevant keywords separated by commas; e.g., Federated Learning, Brain Tumour Detection, Deep Learning, MRI Segmentation, Privacy-Preserving AI]}
+
+% ---------------- 2. INTRODUCTION ----------------
+\purpsec{2. Introduction}
+\begin{guide}{Guideline:}
+Length: 300--500 words.\par
+Provide background context for the problem domain.\par
+State what is known, what is unknown or unsolved, and why this project matters.\par
+End with a clear problem statement (1--3 sentences).\par
+Cite recent literature (last 5 years preferred) to support claims.
+\end{guide}
+
+\navysub{2.1 Background}
+[Introduce the broad domain (e.g., Healthcare AI, Cybersecurity, NLP). Explain the current state of the field and key challenges. Use recent data, statistics, or industry context to justify relevance.]
+
+\navysub{2.2 Problem Statement}
+[State the precise problem your project addresses. Be specific --- avoid vague statements. Example: `Existing intrusion detection systems fail to generalise across heterogeneous network environments due to the lack of federated training, resulting in high false-positive rates in cross-domain deployments.']
+
+\navysub{2.3 Motivation}
+[Explain why this problem is important to solve NOW. What are the consequences if it remains unsolved? Who is affected?]
+
+% ---------------- 3. LITERATURE SURVEY ----------------
+\redsec{3. Literature Survey / Review of Related Work}
+\dredrule
+\begin{guide}{Guideline:}
+Minimum 8--10 references reviewed; summarise key works in 2--3 sentences each.\par
+Identify research gaps from existing work.\par
+Organise by sub-theme, not chronologically.\par
+Every claim must be backed by a citation [Author, Year].\par
+End with a Research Gap Summary table (provided below as a template).
+\end{guide}
+
+[Discuss existing work in your domain. Group papers by theme. Example sub-sections below:]
+
+\navysub{3.1 [Sub-theme 1 --- e.g., Deep Learning for Medical Imaging]}
+[Summarise 2--3 papers. Example: Author et al. [Year] proposed a CNN-based model for X achieving Y\% accuracy on the Z dataset. However, their approach does not account for ...]
+
+\navysub{3.2 [Sub-theme 2 --- e.g., Privacy-Preserving Techniques]}
+[Continue with next cluster of related work...]
+
+\navysub{3.3 Research Gap Summary}
+\renewcommand{\arraystretch}{1.5}
+\begin{longtable}{|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}}p{0.17\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}}p{0.27\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}}p{0.46\linewidth}|}
+\hline
+\rowcolor{tblue}\color{white}\bfseries Reference & \color{white}\bfseries Key Contribution & \color{white}\bfseries Limitation / Research Gap \\ \hline
+[Author, Year] & [What the paper proposed] & [What it did NOT address --- which your project will] \\ \hline
+[Author, Year] & [What the paper proposed] & [What it did NOT address] \\ \hline
+[Author, Year] & [What the paper proposed] & [What it did NOT address] \\ \hline
+\end{longtable}
+
+% ---------------- 4. OBJECTIVES ----------------
+\redsec{4. Objectives}
+\begin{guide}{Guideline:}
+List 3--4 specific, measurable, achievable objectives.\par
+Each objective should start with an action verb (Design, Develop, Implement, Evaluate, Compare, Optimise).\par
+Objectives should collectively address the research gap identified.\par
+Do NOT write vague objectives like `To study the literature'.
+\end{guide}
+
+The primary objectives of this project are:
+\begin{itemize}
+\item To [Action verb + specific goal --- e.g., design a federated learning framework for decentralised brain tumour classification].
+\item To [Action verb + specific goal --- e.g., implement differential privacy mechanisms to ensure data confidentiality across participating institutions].
+\item To [Action verb + specific goal --- e.g., evaluate the proposed model on benchmark datasets (BraTS 2024, TCGA) and compare against state-of-the-art centralised baselines].
+\item To [Action verb + specific goal --- e.g., optimise communication efficiency using gradient compression techniques].
+\end{itemize}
+
+% ---------------- 5. METHODOLOGY ----------------
+\redsec{5. Proposed Methodology}
+\dredrule
+\begin{guide}{Guideline:}
+This is the most critical section. Describe your approach clearly and technically.\par
+Include: system architecture / block diagram description, algorithms or models to be used, dataset(s), tools and technologies, and implementation steps.\par
+If using ML/DL: specify model architecture, loss functions, optimisers, hyperparameters (at least planned).\par
+Distinguish clearly what is novel versus what is adopted from prior work.\par
+Add a figure placeholder for system architecture diagram.
+\end{guide}
+
+\bluesub{5.1 System Architecture Overview}
+[Describe the high-level architecture. Insert a figure here showing the system pipeline or block diagram.]
+
+\begin{tcolorbox}[enhanced,colback=white,colframe=gborder,boxrule=0.5pt,arc=0pt,
+  borderline={0.5pt}{0pt}{gborder,dashed},frame hidden,height=3.4cm,valign=center,halign=center]
+\centering\setstretch{1.2}{\color{gborder}\itshape\small [ INSERT SYSTEM ARCHITECTURE DIAGRAM / BLOCK DIAGRAM HERE ]}\\
+{\itshape\color{gtext}\small Figure 1: Proposed System Architecture}
+\end{tcolorbox}
+
+\bluesub{5.2 Dataset Description}
+[Name the dataset(s) to be used. Provide source (URL or citation), size, format, class distribution, and any pre-processing steps planned.]
+
+\bluesub{5.3 Proposed Algorithm / Model}
+[Describe the core algorithm, model, or technique. If ML/DL: architecture layers, activation functions, loss function, optimiser. If a novel algorithm: provide pseudocode or numbered steps.]
+
+\bluesub{5.4 Implementation Plan (Phase-wise)}
+\renewcommand{\arraystretch}{1.4}
+\begin{longtable}{|>{\centering\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.07\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.26\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.43\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.11\linewidth}|}
+\hline
+\rowcolor{tdark}\color{white}\bfseries Phase & \color{white}\bfseries\centering\arraybackslash Task to be completed & \color{white}\bfseries\centering\arraybackslash Activities involved & \color{white}\bfseries Duration \\ \hline
+I & Literature Review \& Problem Definition & Survey existing work, finalise problem statement, define scope & Weeks \\ \hline
+II & Dataset Acquisition \& Pre-processing & Collect/download dataset, data cleaning, augmentation, EDA & Weeks \\ \hline
+III & System Design \& Architecture & Design system block diagram, select models, prepare environment & Weeks \\ \hline
+IV & Implementation \& Training & Code development, model training, hyperparameter tuning & Weeks \\ \hline
+V & Evaluation \& Testing & Performance metrics, ablation study, comparison with baselines & Weeks \\ \hline
+VI & Documentation \& Reporting & Final report, paper draft, presentation preparation & Weeks \\ \hline
+\end{longtable}
+
+\Needspace{9\baselineskip}
+\bluesub{5.5 Tools \& Technologies}
+\renewcommand{\arraystretch}{1.6}
+\begin{longtable}{|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\bfseries}p{0.30\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\itshape\color{gtext}\small}p{0.60\linewidth}|}
+\hline
+\rowcolor{ghead}\bfseries Category & \bfseries\upshape\color{black}\normalsize Tools / Technologies / Versions \\* \hline
+Programming Language & \\[10pt] \hline
+Frameworks / Libraries & \\[10pt] \hline
+Development Environment & [Jupyter Notebook / VS Code / Google Colab / PyCharm] \\ \hline
+Database / Storage & [MySQL / MongoDB / PostgreSQL / SQLite / HDF5 / AWS S3] \\ \hline
+Hardware / Platform & [GPU: NVIDIA RTX 3090 / Google Colab T4 / DGX Server; RAM: 16 GB] \\ \hline
+Version Control & [Git / GitHub / GitLab] \\ \hline
+Other Tools & [Docker / Kubernetes / Weights \& Biases / MATLAB / Tableau] \\ \hline
+\end{longtable}
+
+% ---------------- 6. OUTCOMES ----------------
+\redsec{6. Expected Outcomes \& Deliverables}
+\dredrule
+\begin{guide}{Guideline:}
+Be specific and measurable. Avoid vague statements like `good accuracy'.\par
+Mention quantitative targets where possible (e.g., $>$90\% F1-score on ABCD dataset).\par
+List deliverables: software prototype, dataset, model weights, paper, etc.
+\end{guide}
+
+Upon successful completion of this project, the following outcomes are expected:
+
+\purpsub{6.1 Technical Outcomes}
+\begin{itemize}
+\item\relax [e.g., A trained and validated model achieving $>$92\% classification accuracy on the benchmark dataset]
+\item\relax [e.g., A fully functional software prototype / web application / API]
+\item\relax [e.g., A comparative evaluation report against 3 state-of-the-art baseline methods]
+\item\relax [e.g., Reduction of communication overhead by $>$30\% using gradient compression]
+\end{itemize}
+
+\purpsub{6.2 Research Outcomes}
+\begin{itemize}
+\item\relax [e.g., Publication of findings in a peer-reviewed Q1/Q2 Scopus/SCI indexed journal or IEEE/Springer conference]
+\item\relax [e.g., A novel algorithm / framework with measurable improvements over existing work]
+\end{itemize}
+
+\purpsub{6.3 Deliverables Checklist}
+\renewcommand{\arraystretch}{1.5}
+\begin{longtable}{|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.55\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.345\linewidth}|}
+\hline
+\rowcolor{tdark}\color{white}\bfseries\centering\arraybackslash Deliverable & \color{white}\bfseries\centering\arraybackslash Target Timeline \\ \hline
+Synopsis / Proposal Document & \\ \hline
+Literature Review Report & \\ \hline
+Working Prototype / Baseline Model & \\ \hline
+Final Trained Model + Code Repository & \\ \hline
+Evaluation Report \& Results & \\ \hline
+Journal / Conference Paper Draft & \\ \hline
+Final Project Report \& Presentation & Week 18 \\ \hline
+\end{longtable}
+
+% ---------------- 7. EVALUATION ----------------
+\purpsec{7. Evaluation Metrics \& Validation Plan}
+\dredrule
+\begin{guide}{Guideline:}
+Specify how you will measure the success of your project.\par
+List relevant metrics for your domain (accuracy, F1, BLEU, FID, etc.).\par
+Mention train/validation/test split, cross-validation strategy, or benchmark comparison approach.\par
+Include ethical considerations if using human data.
+\end{guide}
+
+[Describe metrics relevant to your task:]
+\begin{itemize}
+\item\relax [Classification tasks: Accuracy, Precision, Recall, F1-Score, AUC-ROC, Confusion Matrix]
+\item\relax [Segmentation tasks: Dice Coefficient, IoU (Jaccard Index), Hausdorff Distance]
+\item\relax [NLP tasks: BLEU, ROUGE, METEOR, Perplexity, BERTScore]
+\item\relax [System performance: Latency (ms), Throughput (req/s), Memory footprint (MB)]
+\item\relax [Security/Privacy: Differential Privacy $\varepsilon$-budget, Re-identification risk]
+\end{itemize}
+
+\textbf{Validation Strategy:}
+\begin{itemize}
+\item\relax [e.g., 80/10/10 train-validation-test split with stratified sampling]
+\item\relax [e.g., 5-fold cross-validation to ensure statistical robustness]
+\item\relax [e.g., Comparison against 3 baseline methods on the same dataset under identical conditions]
+\end{itemize}
+
+\textbf{Ethical Considerations:}
+\begin{itemize}
+\item\relax [e.g., Data anonymisation / de-identification procedures]
+\item\relax [e.g., IRB/IEC approval if human subjects or patient data is involved]
+\item\relax [e.g., Bias analysis across demographic subgroups]
+\end{itemize}
+
+% ---------------- 8. REFERENCES ----------------
+\purpsec{8. References}
+\dredrule
+\begin{guide}{Guideline:}
+Minimum 10 references; prefer works from the last 5 years (2020--2025).\par
+Follow IEEE citation format (recommended for CS/Engineering).\par
+Every reference listed must be cited in the text above.\par
+Number references sequentially in the order they first appear in text.\par
+Use a consistent citation manager (Mendeley / Zotero / Google Scholar) to avoid errors.\par
+Examples of IEEE format are provided below --- follow the same pattern.
+\end{guide}
+
+\begingroup\raggedright\sloppy
+\underline{\textbf{IEEE Format Examples:}}
+
+[1] A. B. Author and C. D. Author, ``Title of journal article,'' IEEE Trans. Neural Netw. Learn. Syst., vol. 34, no. 5, pp. 1234--1245, May 2023. doi: 10.1109/TNNLS.2022.XXXXXXX
+
+[2] E. F. Author, ``Title of conference paper,'' in Proc. Int. Conf. Machine Learning (ICML), Vienna, Austria, 2024, pp. 567--578.
+
+[3] G. H. Author, Title of Book, 3rd ed. New York, NY: Springer, 2021.
+
+[4] I. J. Author, ``Title of thesis,'' M.Tech. thesis, Dept. Comput. Sci. Eng., Indian Inst. Technol., Bangalore, India, 2023.
+
+[5] K. L. Author. (2024). ``Title of online resource.'' [Online]. Available: https://example.com/resource. [Accessed: 10 Sept. 2025].
+
+\vspace{2pt}
+[6] [Add your references here following IEEE format]
+
+[7] [Add your references here following IEEE format]
+
+[8] [Add your references here following IEEE format]
+
+[9] [Add your references here following IEEE format]
+
+[10] [Add your references here following IEEE format]
+\endgroup
+
+% ---------------- 9. DECLARATION ----------------
+\purpsec{9. Declaration \& Signatures}
+\dredrule
+{\itshape I/We hereby declare that this project synopsis is our original work carried out as part of the the AI and Ml Course . . This work has not been submitted elsewhere for any other degree or examination. All sources of information have been duly cited and acknowledged.}
+
+\vspace{6pt}
+\noindent\begin{minipage}[t]{0.5\linewidth}
+\setstretch{1.15}
+\textbf{Student Signature:}\\[1.1cm]
+\rule{0.93\linewidth}{0.5pt}\\[-2pt]
+{\itshape\small\color{gtext}[Name \& USN]}\\
+{\itshape\small\color{gtext}Date: \rule[-2pt]{3.4cm}{0.4pt}}
+\end{minipage}%
+\vrule\hspace{8pt}%
+\begin{minipage}[t]{0.46\linewidth}
+\setstretch{1.15}
+\textbf{Guide Signature:}\\[1.1cm]
+\rule{\linewidth}{0.5pt}\\[-2pt]
+{\itshape\small\color{gtext}[Dr./Prof. Name, Designation]}\\
+{\itshape\small\color{gtext}Date: \rule[-2pt]{3.4cm}{0.4pt}}
+\end{minipage}
+
+% ---------------- APPENDIX ----------------
+\newpage
+\redsec{Appendix: Formatting \& Submission Guidelines}
+\dredrule
+\bigskip
+\navysub{A. Document Formatting Requirements}
+\renewcommand{\arraystretch}{1.3}
+\begin{longtable}{|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\bfseries\small}p{0.2\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.7\linewidth}|}
+\hline
+\rowcolor{ghead}\bfseries Parameter & \bfseries Specification \\ \hline
+Paper Size & A4 (210 $\times$ 297 mm) \\ \hline
+Margins & Top: 1 inch $|$ Bottom: 1 inch $|$ Left: 1.25 inch $|$ Right: 1 inch \\ \hline
+Font (Body) & Times New Roman 12pt OR Calibri 11pt \\ \hline
+Font (Headings) & Same font, Bold: H1 = 14pt, H2 = 12pt \\ \hline
+Line Spacing & 1.5 lines (body text) $|$ Single (tables, captions, references) \\ \hline
+Paragraph Spacing & 6pt before, 6pt after \\ \hline
+Alignment & Justified (body) $|$ Centre (title, headings) $|$ Left (bullets) \\ \hline
+Page Numbers & Bottom centre, starting from page 1 of main content \\ \hline
+Header & Project Title (abbreviated, $\leq$60 chars) --- right-aligned \\ \hline
+Total Length & Minimum 10 pages, Maximum 20 pages (excluding references \& appendices) \\ \hline
+Figures \& Tables & Numbered (Figure 1.1,1.2 , Table 1.1, 1.2 according to the chapter in which it appears ), with captions below figures and above tables \\ \hline
+File Format & Submit as .docx AND .pdf (both required) in the Google classroom folder assigned \\ \hline
+Naming Convention & USNs\_StudentNames.doc\ \ (e.g., 1RV24ISE001\_002 \_Name1\_Name2.pdf) \\ \hline
+\end{longtable}
+
+\end{document}
