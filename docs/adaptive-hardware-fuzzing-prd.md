@@ -3,9 +3,9 @@
 **Working name:** Adaptive Hardware Fuzzing Testbench (AHFT)  
 **Short name used in this document:** Adaptive Fuzzer  
 **Document type:** Product Requirements Document and research protocol  
-**Status:** Research POC definition  
-**Version:** 1.0  
-**Prepared:** 3 September 2026  
+**Status:** Research POC definition (Part I) + AHFT V1 Feature 1 specification (Part II) — **draft awaiting team confirmation**  
+**Version:** 2.0 (draft)  
+**Prepared:** 3 September 2026 · **Revised:** 12 November 2026  
 **Primary audience:** Final-year project team, faculty guides, evaluators, embedded-systems researchers, and laboratory staff  
 **Target team:** Five undergraduate CS/engineering students with access to an electronics laboratory  
 **Literature cutoff:** Sources checked through 3 September 2026
@@ -25,6 +25,20 @@ This PRD remains the research vision. The HLDs (`docs/00`–`docs/10`) define th
 - **Adaptive method (§13, §31):** TPE and GP-BO are both kept. In simulation neither dominated: GP-BO was better on two benchmarks and worse on one, and adaptive search did not beat random on a fault with no measurable precursor (HLD 06 §3).
 - **Robustness (§13.3):** see HLD 04 §13 for the normalized planner signal and the guard-banded verdict.
 - **Example limits (§9.2):** the OLED rail range of 3.00–3.60 V may sit partly below the SSD1306's specified supply; limits come from the exact parts (HLD 02 §19.1).
+
+## Document structure and revision history (2026-11-12)
+
+| Part | Sections | Content |
+|---|---|---|
+| **Part I** | §1–§34 | Research vision, safety model, benchmark design, literature review, plan (v1.0, 3 Sep 2026; unchanged except where Part II overrides V1 scope) |
+| **Part II** | §35–§57 | **AHFT V1 — Feature 1: Timing-Related Failure Detection**: ESP32 JSONL protocol, microsecond timing metrics, deadline oracle, ExtraTrees adaptive planner, persistence, REST/SSE API, dashboard, verification status, hardware bring-up, milestones, traceability and project-report mapping |
+
+| Version | Date | Change |
+|---|---|---|
+| 1.0 | 3 Sep 2026 | Initial research PRD |
+| 2.0 (draft) | 12 Nov 2026 | Added Part II integrating the Hardware Team *AHFT V1 Handoff (12 Nov 2026)* and the software implementation; V1 scope narrowed to Feature 1; hardware-ready simulator-first architecture |
+
+**Precedence:** for V1 scope, **Part II overrides Part I** (e.g., Part I's multi-rail OLED/Wi-Fi/flash rig is deferred; Feature 1 changes no voltages). Part I remains the governing document for safety philosophy, honest-result language and long-term evaluation design.
 
 ---
 
@@ -1893,3 +1907,937 @@ Build the project only in the following form:
 > **One reusable, safety-constrained HIL station; two low-voltage embedded DUT designs; a device-specific test contract and fixture for each; a mixed continuous/discrete/temporal adaptive search; disclosed seeded benchmarks plus at least one emergent physical scenario; and repeated comparison against strong non-AI baselines.**
 
 Do not build a universal electronics tester. Do not make an LLM the control loop. Do not claim passing samples certify an entire envelope. If grid or t-way testing wins at the chosen scale, that is a useful result: it identifies where adaptive intelligence is unnecessary. If the adaptive method wins only when a continuous precursor exists, report that boundary clearly. That conditional answer is more credible—and more publishable—than a broad claim that “AI tests hardware better.”
+
+---
+
+# PART II — AHFT V1: TIMING-RELATED FAILURE DETECTION (FEATURE 1)
+
+**Part II version:** 2.0 (draft for review) · **Date:** 12 November 2026 · **Source of truth:** Hardware Team *AHFT V1 Handoff (12 November 2026)* and the software implementation in this repository.
+
+> **How to read Part I and Part II.** Part I (§1–§34) is the long-range research vision: a safety-constrained, multi-rail adaptive physical fuzzer. Part II defines **what is being built first**: a narrow, fully specified vertical slice — *Feature 1: Timing-Related Failure Detection* — in which a PC software stack drives an ESP32 over a JSONL serial link, measures microsecond-level scheduling behaviour, labels failures with a deterministic oracle, and uses a leakage-free ExtraTrees-based adaptive planner to find timing failures in fewer experiments than baselines. Where Part I and Part II disagree on V1 scope, **Part II wins**.
+
+---
+
+## 35. AHFT V1 overview and relationship to Part I
+
+### 35.1 What changed between v1.0 and v2.0 of this PRD
+
+| Topic | v1.0 (3 Sep 2026) | v2.0 (12 Nov 2026) |
+|---|---|---|
+| First deliverable | Multi-rail OLED/Wi-Fi/flash fuzzing rig | **Feature 1: timing-failure detection on an ESP32** with a software-defined synthetic workload |
+| Controlled variables | Rail voltages, LED states, workloads, event sequences | `sampling_interval_ms`, `duration_ms`, `sensor_type`, `task_load`, `deadline_ms`, `warmup_ms` |
+| Physical power control | Programmable rails, interlock, E-stop | **Not part of Feature 1.** Feature 1 changes no voltages; it only configures firmware behaviour over serial. Rail control remains Part I / HLD 02–03 scope |
+| Host ↔ DUT link | Instrument adapters (SCPI/serial/USB) | **UTF-8 JSONL over USB serial** (`PING`, `GET_CAPABILITIES`, `EXECUTE`, `STOP`) with typed schemas |
+| Time base | Millisecond-class host timestamps | **Microsecond** raw records in the ESP32 monotonic clock domain |
+| Pass/fail | Requirement-dependent oracles | **One frozen deadline rule** and a failure-class taxonomy with reproducible signatures |
+| Adaptive model | TPE / GP-BO / RF (open decision) | **ExtraTrees ensemble** with acquisition `A(x) = α·P(fail\|x) + β·U(x) + γ·Novelty(x)`, ablation presets, plus random/grid/TPE/coverage baselines |
+| Persistence | Campaign-directory files | **SQLite** `ahft_*` tables (append-only audit events) |
+| API | `/v1/*` campaign API | Adds **`/api/*`** REST + Server-Sent Events for Feature 1 |
+| UI | Campaign console | Adds **`/ahft`** Next.js dashboard with Views A–G |
+| Hardware readiness | Planned | **Simulator-first**: a deterministic ESP32 simulator speaks the same wire protocol; switching to real hardware changes one adapter (§53) |
+
+### 35.2 Scope of Feature 1
+
+**In scope**
+
+1. A versioned, machine-validated PC↔ESP32 JSONL protocol and capability handshake.
+2. A raw microsecond sample record per scheduled task release, with warm-up excluded from statistics.
+3. PC-side **recomputation** of every summary metric from raw samples and automatic comparison against the firmware's own summary.
+4. A frozen deadline oracle and a taxonomy of failure outcomes with reproducible signatures.
+5. A leakage-free adaptive planner and baselines, with ablation support, evaluated on identical budgets.
+6. Persistence, REST/SSE API, and a seven-view operator dashboard.
+7. A deterministic ESP32 simulator with seeded, *disclosed* timing defects and fault injection for end-to-end testing before hardware is connected.
+
+**Out of scope for Feature 1** (unchanged from Part I §7.2 unless stated)
+
+- Voltage/rail variation, brown-out testing, E-stop/interlock hardware (Part I).
+- Wi-Fi/Bluetooth/flash-write workloads, OLED display faults.
+- Destructive or security fault injection (voltage/clock glitching).
+- Multi-DUT scheduling and unattended remote operation.
+- Claims of real-time-OS certification or worst-case-execution-time (WCET) guarantees.
+
+### 35.3 Current implementation status (summary)
+
+| Capability | Status | Evidence |
+|---|---|---|
+| Typed contracts and validation (`activequal/model/ahft.py`) | Implemented | Unit tests (§52) |
+| Timing oracle and discrepancy verifier (`activequal/service/timing_oracle.py`) | Implemented | Unit tests |
+| JSONL bridge + simulator + fault injection (`activequal/adapter/service/esp32_jsonl.py`) | Implemented (simulator path exercised; **real serial path untested on hardware**) | Unit tests over `InMemoryJsonlWire` |
+| ExtraTrees planner + ablations | Implemented | Unit tests |
+| SQLite migration #2 | Implemented | Database tests |
+| REST/SSE API | Implemented | API test |
+| `/ahft` dashboard (Views A–G) | Implemented; production build passes | `next build`, typecheck |
+| Browser end-to-end run of Views A–G | **Not yet completed** | Pending (§52.4) |
+| Operation against a real ESP32 | **Not yet done** | Blocked on firmware/hardware bring-up (§53) |
+
+---
+
+## 36. Stakeholders and ownership split
+
+| Area | Owner | Deliverable | Interface to the other team |
+|---|---|---|---|
+| ESP32 firmware, ADC sampling, task scheduler, serial protocol endpoint | **Hardware team** | Firmware speaking the §40 protocol; calibrated task-load loop; boot/reset reporting | `GET_CAPABILITIES` response is the single source of truth for limits |
+| Wiring, sensor fixtures (LDR, potentiometer), power/USB, bring-up | **Hardware team** | Verified GPIO mapping, ADC behaviour | Capability fields `gpio_mapping`, `adc_bits`, `adc_max_raw` |
+| PC bridge, validation, oracle, planner, persistence, API, dashboard | **Software team** | This repository | Protocol schemas in `activequal/model/ahft.py` |
+| Evaluation protocol, report, PRD | **Joint** | §51, project report | Shared seeds, shared raw logs |
+
+Joint rule: **neither side may silently reinterpret a field.** Any change to a field name, unit, boundary convention or rule in §41–§43 requires a protocol-version bump and sign-off from both teams.
+
+---
+
+## 37. Problem statement, goals and success criteria for Feature 1
+
+### 37.1 Problem
+
+Embedded firmware that samples a sensor on a periodic schedule can look correct at nominal settings yet miss deadlines, jitter badly, or even trip the watchdog when sampling rate, computational load, sensor path and deadline interact. The configuration space (≈ interval × duration × sensor × load × deadline × warm-up) is large relative to the time each physical experiment takes, and failure regions can be narrow and interacting. Exhaustive sweeps are expensive; random sampling wastes experiments in safe regions.
+
+### 37.2 Goals
+
+| ID | Goal |
+|---|---|
+| G1 | Measure timing behaviour with **microsecond** raw evidence, never only summaries. |
+| G2 | Use **one unambiguous deadline rule** and independently verify the firmware's own statistics. |
+| G3 | Never execute or record an unapproved configuration as if it ran (**no silent clamping**). |
+| G4 | Find distinct timing failures in **fewer experiments** than random/grid baselines at equal budgets, or report honestly when it does not. |
+| G5 | Make the software side hardware-ready: swapping simulator for real ESP32 changes one adapter. |
+| G6 | Provide an operator dashboard and exports sufficient for a reproducible project report. |
+
+### 37.3 Success criteria (Feature 1 acceptance)
+
+1. All out-of-capability configurations are rejected with structured reasons; zero are executed.
+2. For every completed experiment, PC-recomputed metrics are stored beside firmware metrics, and any disagreement beyond tolerance is flagged.
+3. Experiments are reproducible from `(seed, config, simulator noise seed)` in simulation.
+4. Strategy runs report experiments-to-first-failure, unique failure signatures, and discovery curves for every strategy on the same budget.
+5. A user can run the full flow (connect → configure → run → inspect → export → adaptive run → compare) from the dashboard without a terminal.
+6. The same flow runs against a real ESP32 after changing the device mode to `serial` (hardware acceptance, §53).
+
+### 37.4 Honesty rules specific to Feature 1
+
+- Failures found in simulation come from **seeded, disclosed defects** (§44). They validate the pipeline, not the physical firmware.
+- "No timing failure found within *N* experiments" never means "the firmware meets all deadlines."
+- A `SENSOR_FAULT` is **not** a timing failure and is never counted as one.
+- Results from simulation and from hardware are labelled `is_simulated` in the database and must not be pooled without disclosure.
+
+---
+
+## 38. System architecture
+
+### 38.1 Component diagram
+
+```mermaid
+flowchart LR
+    subgraph Browser
+        UI["/ahft dashboard - Views A to G"]
+    end
+    subgraph Console["Next.js Console (BFF)"]
+        PX["Proxy: allow-listed /api routes, operator token + actor header"]
+    end
+    subgraph CP["Python control plane (loopback)"]
+        API["HTTP API /api: REST + SSE"]
+        SVC["AhftService"]
+        VAL["validate_experiment_config (no clamping)"]
+        ORC["Timing oracle: recompute, verify, classify"]
+        PLN["Planners: ExtraTrees, random, grid, TPE, coverage"]
+        DB[("SQLite ahft tables")]
+    end
+    subgraph Adapter["Adapter layer"]
+        BR["Esp32JsonlBridge"]
+        SIM["SimulatedEsp32Bridge + InMemoryJsonlWire"]
+        SER["PySerialLineTransport"]
+    end
+    subgraph HW["Hardware team"]
+        ESP["ESP32 firmware - JSONL endpoint"]
+    end
+    UI --> PX --> API --> SVC
+    SVC --> VAL --> BR
+    SVC --> ORC
+    SVC --> PLN
+    SVC --> DB
+    BR --> SIM
+    BR --> SER --> ESP
+```
+
+### 38.2 Layering and import boundaries
+
+| Layer | Package | Rule (enforced by `activequal/tests/test_boundaries.py`) |
+|---|---|---|
+| Model (schemas) | `activequal.model` | Pure stdlib; must not import `optuna`, `torch`, `scipy`, `numpy` or any `activequal.<service>` |
+| Decision (planners) | `activequal.decision` | Must not import `activequal.adapter`, `controller`, `service`, `storage`, `tools` |
+| Adapter | `activequal.adapter.service` | Owns serial/simulator I/O; imports model only |
+| Service | `activequal.service` | Orchestration, oracle, persistence, HTTP |
+| Console | `activequal/console/ui` | Never holds the operator token in the browser; BFF adds it server-side |
+
+### 38.3 The hardware-swap seam
+
+`AhftService` talks only to the `HardwareBridge` protocol (`ping`, `get_capabilities`, `execute_experiment`, `stop_experiment`, `is_simulated`). Two interchangeable transports exist behind `Esp32JsonlBridge`:
+
+- `InMemoryJsonlWire(SimulatedEsp32Bridge)` — deterministic simulator, same JSON frames as real hardware.
+- `PySerialLineTransport(port, baud)` — real USB serial, 115 200 baud default.
+
+Switching is a device-configuration action (`POST /api/devices/{id}/configure` with `mode: "serial"` and `serial_port`), **not** a code change. A failed connection is logged as `SERIAL_CONNECT_FAILED` and the device is marked disconnected.
+
+### 38.4 End-to-end sequence for one experiment
+
+```mermaid
+sequenceDiagram
+    actor Op as Operator
+    participant UI as Dashboard
+    participant S as AhftService
+    participant V as Validator
+    participant B as JSONL Bridge
+    participant D as ESP32 or simulator
+    participant O as Oracle
+    participant DB as SQLite
+
+    Op->>UI: Submit configuration
+    UI->>S: POST /api/experiments
+    S->>DB: insert PENDING experiment
+    S->>V: validate against capabilities
+    alt rejected
+        V-->>S: structured rejections
+        S->>O: classify REJECTED
+        S->>DB: store summary and SAFETY event
+        S-->>UI: 201 (status REJECTED)
+    else accepted
+        S->>B: execute_experiment(config)
+        B->>D: EXECUTE
+        D-->>B: ACK ACCEPTED
+        loop each scheduled release
+            D-->>B: SAMPLE (raw microsecond record)
+        end
+        D-->>B: SUMMARY (firmware statistics)
+        B-->>S: result and raw samples
+        S->>O: recompute, verify, classify
+        S->>DB: samples, summaries, events
+        S-->>UI: 201 (outcome, signature, discrepancies)
+    end
+```
+
+---
+
+## 39. Hardware specification (ESP32 DUT)
+
+### 39.1 Reference device
+
+| Item | Value (from `DeviceCapabilities` defaults and handoff) |
+|---|---|
+| Module | ESP32-WROOM-32 |
+| Firmware identifier | `1.0.0-ahft-v1` |
+| Protocol version | `1` |
+| ADC | 12-bit, raw range 0–4095 |
+| Sensor channels | `LDR` (GPIO 34), `POT` (GPIO 35), `ADC_SIM` (synthetic, no pin) |
+| Link | USB serial, UTF-8 JSON Lines, 115 200 baud default |
+| Max frame size | 65 536 bytes per line |
+| Sample buffer | 4 096 samples per experiment |
+
+> **Reconciliation note.** Part I used an ESP32-**S3** carrier for the multi-rail demo; the V1 handoff capabilities default to **ESP32-WROOM-32**. The actual module on the bench must be confirmed by the hardware team and the `model` field in `GET_CAPABILITIES` must report it truthfully (see §55, decision D-1).
+
+### 39.2 Capability envelope (limits enforced on both PC and DUT)
+
+| Parameter | Unit | Min | Max |
+|---|---|---:|---:|
+| `sampling_interval_ms` | ms | 5 | 1 000 |
+| `duration_ms` | ms | 100 | 30 000 |
+| `task_load` | calibrated work units | 0 | 100 |
+| `deadline_ms` | ms | 2 | 1 000 |
+| `warmup_ms` | ms | 0 | 5 000 |
+
+Derived constraints: `duration_ms ≥ sampling_interval_ms`; `duration_ms // sampling_interval_ms ≤ max_buffered_samples` (4 096).
+
+### 39.3 Firmware responsibilities
+
+1. Answer `PING` with `PONG` including `boot_id` and `state`.
+2. Answer `GET_CAPABILITIES` with the envelope above, `boot_id`, `reset_reason`, `adc_bits`, `adc_max_raw`, `gpio_mapping`.
+3. On `EXECUTE`: **re-validate** the request against its own limits (the DUT is the last line of defence); reply `ACK` with `ACCEPTED` or `REJECTED` + reasons. Never clamp.
+4. Schedule releases at `k × sampling_interval_ms` (`k = 1 … duration_ms // sampling_interval_ms`) after the measured window starts, preceded by a warm-up window of `warmup_ms`.
+5. For each release record `scheduled_time_us`, `actual_time_us` (start of the task), `execution_time_us` (task body, including the synthetic load and sensor read), the sensor value, `read_success`, `error_code`, all from a single **monotonic microsecond clock**.
+6. Emit one `SAMPLE` frame per release (warm-up samples flagged `is_warmup: true`) and a final `SUMMARY`.
+7. Honour `STOP` promptly: stop scheduling, flush, reply `STOP_ACK`, and report `execution_status: "ABORTED"`.
+8. Report resets honestly: a new `boot_id` after an unexpected reset; `reset_reason`; `watchdog_triggered`.
+9. Expose a **calibrated work unit** for `task_load` so that load is reproducible across boards (the calibration procedure is a hardware-team deliverable, §53).
+
+### 39.4 Timing-measurement requirements on the hardware side
+
+- All three timestamps come from the **same** monotonic clock (e.g., `esp_timer_get_time()` in µs). Wall-clock time is never used.
+- `scheduled_time_us` is the *ideal* release time, not the observed one.
+- The clock domain is the ESP32's; the PC never mixes it with host timestamps when computing intervals, lateness or deadlines.
+- Serial transmission must not run inside the timed task body; samples are buffered and transmitted outside the measured window so that logging does not perturb the measurement.
+
+---
+
+## 40. PC ↔ ESP32 JSONL protocol
+
+### 40.1 Framing
+
+- One JSON object per line, UTF-8, terminated by `\n`. No embedded newlines.
+- Maximum 65 536 bytes per frame; larger frames are rejected (`FRAME_TOO_LARGE`).
+- Invalid JSON yields an `ERROR` frame with `code: "BAD_JSON"`.
+- Every host frame carries `protocol_version` (currently `1`). A mismatch is rejected with `BAD_PROTOCOL_VERSION`.
+
+### 40.2 Commands (PC → ESP32)
+
+| Command | Purpose | Reply frames |
+|---|---|---|
+| `PING` | Liveness and boot-identity check | `PONG` |
+| `GET_CAPABILITIES` | Handshake: limits, sensors, ADC, GPIO map | `CAPABILITIES` |
+| `EXECUTE` | Run one experiment | `ACK` → `SAMPLE`* → `SUMMARY` |
+| `STOP` | Abort the active experiment | `STOP_ACK` (then `SUMMARY` with `ABORTED`) |
+
+Unknown commands produce `ERROR` / `INVALID_COMMAND`.
+
+### 40.3 Example transcript
+
+```json
+{"protocol_version":1,"command":"PING"}
+{"type":"PONG","status":"PONG","boot_id":"boot-esp32-0001","state":"IDLE"}
+
+{"protocol_version":1,"command":"GET_CAPABILITIES"}
+{"type":"CAPABILITIES","device_id":"esp32-dut-01","model":"ESP32-WROOM-32","firmware_version":"1.0.0-ahft-v1","protocol_version":1,"boot_id":"boot-esp32-0001","reset_reason":"POWERON_RESET","sensors":["LDR","POT","ADC_SIM"],"limits":{"sampling_interval_ms":{"min":5,"max":1000,"unit":"ms"},"duration_ms":{"min":100,"max":30000,"unit":"ms"},"task_load":{"min":0,"max":100,"unit":"calibrated_work_units"},"deadline_ms":{"min":2,"max":1000,"unit":"ms"},"warmup_ms":{"min":0,"max":5000,"unit":"ms"}},"adc_bits":12,"adc_max_raw":4095,"max_buffered_samples":4096,"gpio_mapping":{"LDR":34,"POT":35,"ADC_SIM":0}}
+
+{"protocol_version":1,"command":"EXECUTE","experiment_id":42,"sampling_interval_ms":10,"duration_ms":1000,"sensor_type":"POT","task_load":70,"deadline_ms":8,"warmup_ms":100,"task_load_unit":"calibrated_work_units","workload_profile":"synthetic_alu_loop"}
+{"type":"ACK","experiment_id":42,"status":"ACCEPTED","boot_id":"boot-esp32-0001"}
+{"type":"SAMPLE","experiment_id":42,"sequence_number":1,"scheduled_time_us":10000,"actual_time_us":10120,"execution_time_us":9340,"sensor_value":2048,"read_success":true,"error_code":0,"boot_id":"boot-esp32-0001","is_warmup":true}
+{"type":"SUMMARY","experiment_id":42,"execution_status":"COMPLETED","firmware_version":"1.0.0-ahft-v1","metadata":{},"timing":{},"sensor":{},"system_health":{}}
+```
+
+(Sample and summary bodies abbreviated; full field lists are in §42.)
+
+### 40.4 Timeouts and failure handling (PC side)
+
+| Situation | Behaviour |
+|---|---|
+| No `ACK` within the command timeout (default 2 s) | Result `TIMEOUT`, classified `COMM_ERROR` |
+| `ACK` rejected by DUT | Result `REJECTED` with the DUT's reasons (second validator) |
+| Unparseable frame mid-run | Counted in `communication_errors`, run continues |
+| No `SUMMARY` before `(warmup + duration)/1000 + command_timeout + 2 s` | `TIMEOUT` with whatever raw samples arrived |
+| Frames for another `experiment_id` | Ignored |
+| `STOP` | `STOP_ACK`; experiment recorded `ABORTED` and never used as training data |
+
+---
+
+## 41. Experiment input contract (X) and validation
+
+### 41.1 Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `protocol_version` | int | Must equal the device's version (1) |
+| `command` | string | `EXECUTE` |
+| `experiment_id` | int ≥ 1 | Assigned by the PC; unique per experiment |
+| `sampling_interval_ms` | int | Period between scheduled releases |
+| `duration_ms` | int | Length of the **measured** window |
+| `sensor_type` | enum | `LDR`, `POT`, `ADC_SIM` (case-normalised to upper-case by the service) |
+| `task_load` | int | Calibrated synthetic work per release |
+| `deadline_ms` | int | Relative deadline from each scheduled release |
+| `warmup_ms` | int | Initial window excluded from statistics |
+| `run_id` | string, optional | Links the experiment to a strategy run |
+| `task_load_unit`, `workload_profile` | string | Default `calibrated_work_units`, `synthetic_alu_loop` |
+
+### 41.2 Strict typing
+
+Booleans are **not** accepted as integers; floats are not accepted for integer fields; strings are not coerced. This prevents a malformed request being silently reinterpreted.
+
+### 41.3 Rejection codes
+
+| Code | Meaning |
+|---|---|
+| `MISSING_FIELD` | Required field absent or null |
+| `INVALID_TYPE` | Wrong JSON type |
+| `OUT_OF_RANGE` | Outside the capability range, or scheduled samples exceed the buffer |
+| `UNSUPPORTED_SENSOR` | `sensor_type` not in the reported `sensors` list |
+| `INVALID_COMMAND` | Command not in the supported set |
+| `BAD_PROTOCOL_VERSION` | Protocol mismatch |
+| `INVALID_WINDOW` | `duration_ms < sampling_interval_ms` |
+
+All problems are returned together (not first-error-only). A rejected request is persisted with status `REJECTED`, produces a `SAFETY` event, and is **never** executed or used for training.
+
+### 41.4 Sampling boundary convention
+
+Expected measured samples = `duration_ms // sampling_interval_ms` (releases at `k·interval`, `k = 1…N`). Warm-up samples = `warmup_ms // sampling_interval_ms`. This convention is fixed so PC and firmware agree on denominators.
+
+---
+
+## 42. Raw sample record and result contract
+
+### 42.1 Raw sample (ESP32 → PC), one per release
+
+| Field | Unit | Definition |
+|---|---|---|
+| `experiment_id` | – | Owning experiment |
+| `sequence_number` | – | 1-based release index within its window |
+| `scheduled_time_us` | µs | Ideal release time (ESP32 monotonic) |
+| `actual_time_us` | µs | Observed task start |
+| `execution_time_us` | µs | Task body duration |
+| `sensor_value` | raw ADC | 0–4095 |
+| `read_success` | bool | Sensor read OK |
+| `error_code` | int | 0 = none |
+| `boot_id` | string | Boot instance that produced the sample |
+| `is_warmup` | bool | Excluded from statistics when true |
+
+Derived by the PC (never trusted from firmware):
+
+- `start_lateness_us = actual_time_us − scheduled_time_us`
+- `completion_time_us = actual_time_us + execution_time_us`
+- `inter_sample_interval_us = actual_time_us(k) − actual_time_us(k−1)` (measured samples only)
+- `interval_error_us = inter_sample_interval_us − sampling_interval_ms·1000`
+
+### 42.2 Firmware summary (`SUMMARY`)
+
+| Block | Fields |
+|---|---|
+| `execution_status` | `COMPLETED`, `REJECTED`, `ABORTED`, `ERROR`, `TIMEOUT` |
+| `metadata` | `total_samples`, `successful_samples`, `failed_samples`, `eligible_scheduled_samples`, `warmup_samples_excluded`, `dropped_record_count` |
+| `timing` | `requested_interval_ms`, `mean/min/max_interval_ms`, `jitter_ms`, `mean/max_execution_time_ms`, `missed_deadlines`, `deadline_miss_rate`, `max_start_lateness_ms` |
+| `sensor` | `sensor_type`, `mean/min/max_sensor_value`, `invalid_readings` |
+| `system_health` | `watchdog_triggered`, `reset_detected`, `communication_errors`, `experiment_duration_ms`, `boot_id`, `reset_reason` |
+| `rejections` | present when rejected |
+
+The firmware summary is **advisory**. The authoritative statistics are those the PC recomputes from raw samples (§43).
+
+---
+
+## 43. Timing metrics and the failure oracle
+
+### 43.1 Metric definitions (frozen for V1)
+
+| Metric | Definition |
+|---|---|
+| Measured samples | Raw samples with `is_warmup = false` |
+| Mean / min / max interval | Over consecutive measured `actual_time_us` differences |
+| **Jitter** | **Sample standard deviation (ddof = 1)** of the inter-sample intervals, in ms; 0 if fewer than two intervals |
+| Mean / max execution time | Over measured `execution_time_us` |
+| Max start lateness | Max of `start_lateness_us` over measured samples |
+| Valid sensor read | `read_success` and `0 ≤ sensor_value ≤ adc_max_raw` |
+| Deadline miss rate | `missed_deadlines / eligible_scheduled_samples`, clamped to [0,1] |
+| Eligible scheduled samples | `max(duration_ms // sampling_interval_ms, measured_count)` — samples that never arrived still count against the denominator |
+| Dropped records | `max(0, expected_samples − measured_count)` |
+
+### 43.2 The deadline rule
+
+> **A sample misses its deadline if and only if**
+> `completion_time_us > scheduled_time_us + deadline_ms × 1000`.
+
+Both start lateness and execution time contribute, because the deadline is anchored at the **scheduled** release.
+
+*Worked example.* `scheduled = 100 000 µs`, `actual = 100 400 µs`, `execution = 9 800 µs`, `deadline_ms = 10`.
+`completion = 110 200 µs`; threshold = `100 000 + 10 000 = 110 000 µs` → **missed by 200 µs**, although execution alone (9.8 ms) was within 10 ms.
+
+### 43.3 Independent verification of firmware statistics
+
+`verify_summaries()` compares the firmware summary to PC recomputation and emits flags:
+
+| Flag | Condition |
+|---|---|
+| `SAMPLE_COUNT_MISMATCH` | `total_samples` differs |
+| `MISSED_DEADLINES_MISMATCH` | counts differ |
+| `MISS_RATE_MISMATCH` | difference > 0.002 |
+| `MEAN_INTERVAL_MISMATCH` | difference > 0.05 ms |
+| `JITTER_MISMATCH` | difference > 0.05 ms |
+| `INVALID_READINGS_MISMATCH` | counts differ |
+
+Discrepancies do not change the label (the PC recomputation is authoritative) but raise a `SUMMARY_DISCREPANCY` warning event and are shown in the dashboard.
+
+### 43.4 Outcome classification (order of evaluation)
+
+```mermaid
+flowchart TD
+    A["Firmware execution_status"] -->|REJECTED| R["REJECTED - no label"]
+    A -->|ABORTED| AB["ABORTED - no label"]
+    A --> W{"watchdog or reset or boot_id changed?"}
+    W -->|yes| WD["WATCHDOG_RESET - label 1"]
+    W -->|no| C{"TIMEOUT/ERROR, comm errors, or zero samples?"}
+    C -->|yes| CE["COMM_ERROR - no label"]
+    C -->|no| M{"missed deadlines greater than 0?"}
+    M -->|yes| TF1["TIMING_FAILURE: DEADLINE_MISS_TRANSIENT or SEVERE - label 1"]
+    M -->|no| J{"jitter above max of 1.5 ms and 25 percent of interval?"}
+    J -->|yes| TF2["TIMING_FAILURE: EXCESSIVE_JITTER - label 1"]
+    J -->|no| S{"invalid sensor reads?"}
+    S -->|yes| SF["SENSOR_FAULT - label 0"]
+    S -->|no| P["PASS - label 0"]
+```
+
+| Outcome | `failure_label` | Used as training data? | Notes |
+|---|---:|---|---|
+| `PASS` | 0 | Yes | |
+| `TIMING_FAILURE` | 1 | Yes | `DEADLINE_MISS_TRANSIENT` (miss rate < 10 %), `DEADLINE_MISS_SEVERE` (≥ 10 %), `EXCESSIVE_JITTER` |
+| `WATCHDOG_RESET` | 1 | Yes | Includes unexpected `boot_id` change |
+| `SENSOR_FAULT` | 0 | Yes (as non-timing) | Kept distinct from timing failures by design |
+| `COMM_ERROR` | none | **No** | Transport problem, not a DUT verdict |
+| `REJECTED` | none | **No** | Safety validator refusal |
+| `ABORTED` | none | **No** | Operator stop |
+
+### 43.5 Reproducible failure signatures
+
+A signature buckets a failure so that equivalent failures are counted once (used for "unique failures found"):
+
+| Class | Signature pattern |
+|---|---|
+| Deadline miss | `DEADLINE_MISS:{TRANSIENT\|SEVERE}:{sensor}:p{interval rounded up to 10 ms}ms:load{⌊load/20⌋·20}` |
+| Excessive jitter | `EXCESSIVE_JITTER:{sensor}:p{interval bucket}ms:load{load bucket}` |
+| Watchdog / reset | `WATCHDOG_RESET:{sensor}:interval<={bucket}ms:load>={⌊load/20⌋·20}` |
+| Sensor fault | `SENSOR_INVALID:{sensor}` |
+
+> Signature bucketing is a *V1 design choice* (§55, D-4); the bucket widths affect the "unique failures" metric and must be frozen before the final evaluation.
+
+---
+
+## 44. Seeded fault model and the ESP32 simulator
+
+### 44.1 Why a simulator
+
+The software must be demonstrably correct before hardware is attached, and the planner needs failure-bearing data to evaluate. The simulator speaks the **identical** JSONL frames (through `InMemoryJsonlWire`), re-validates configurations like firmware, uses a monotonic µs clock model, and is **deterministic**: its noise generator is seeded from a SHA-256 hash of `(noise_seed, experiment_id, all configuration fields)`.
+
+### 44.2 Seeded timing defects (disclosed ground truth)
+
+| Defect | Trigger region | Effect |
+|---|---|---|
+| **A — high-load scheduling contention** | `sampling_interval_ms ≤ 15` and `task_load ≥ 65` | Release queuing delay and jitter spikes → deadline misses / excessive jitter |
+| **B — tight deadline with POT ADC stalls** | `sensor_type = POT`, `task_load ≥ 50`, `deadline_ms ≤ 10` | Stretched execution time and lateness beyond the deadline |
+| **C — watchdog starvation** | `sampling_interval_ms ≤ 5` and `task_load ≥ 90` | Idle-task starvation → watchdog reset, new `boot_id` |
+
+These are **intentionally programmed** (per Part I §17.1) and must be labelled as seeded in any report. The planner never reads these rules; it sees only pre-execution configuration and post-execution oracle outcomes.
+
+### 44.3 Fault-injection switches (`FaultInjectionConfig`)
+
+| Switch | Purpose |
+|---|---|
+| `seeded_timing_defects` (default on) | Enable defects A–C |
+| `force_watchdog_reset` | Test reset handling and `boot_id` change |
+| `force_comm_timeout` | Test TIMEOUT/`COMM_ERROR` handling |
+| `force_sensor_glitch` | Test `SENSOR_FAULT` separation |
+| `corrupt_firmware_summary` | Test discrepancy detector (firmware lies, PC recomputation disagrees) |
+
+Switches are set through `POST /api/devices/{id}/configure` (`fault_config`), persisted on the device row, and every change is logged.
+
+---
+
+## 45. Adaptive machine-learning component
+
+### 45.1 Problem formulation
+
+- **Input X** (pre-execution configuration only): `sampling_interval_ms`, `duration_ms`, `sensor_type`, `task_load`, `deadline_ms`, `warmup_ms`.
+- **Label y**: oracle `failure_label` ∈ {0, 1} for trainable outcomes (`PASS`, `TIMING_FAILURE`, `WATCHDOG_RESET`, `SENSOR_FAULT`); `COMM_ERROR`, `REJECTED`, `ABORTED` are excluded.
+- **Goal**: choose the next safe configuration to maximise the number of *distinct* failure signatures discovered within a budget.
+
+### 45.2 Leakage control
+
+1. `ExperimentConfig.to_feature_dict()` contains **only** the six pre-execution variables — never jitter, miss rate, outcome, signature, or any post-run quantity.
+2. Training rows are built from *prior* experiments in the same run only; the candidate being scored has no label.
+3. The simulator's seeded-defect rules are not exposed to the planner.
+4. Candidate pools exclude already-executed configurations and forbidden combinations, so the planner cannot "re-discover" a known result.
+
+### 45.3 Model: ExtraTrees ensemble
+
+- Ensemble of **25** extremely-randomised trees (random split features and thresholds), each fit on a bootstrap resample of the training set.
+- **P(fail | x)** = mean tree prediction; **U(x)** = standard deviation of tree predictions (epistemic-uncertainty proxy).
+- For `PASS` observations with a robustness margin the regression target is a *failure-proximity* value `clip((1 − robustness)·0.45, 0, 0.85)`, so near-limit passes still inform the surrogate; failures are targeted at 1.0.
+- **Novelty(x)** = minimum Euclidean distance from the encoded candidate to every already-tested configuration.
+
+### 45.4 Acquisition
+
+$$A(x) = \alpha\,\hat P(\text{fail}\mid x) + \beta\,\hat U(x) + \gamma\,\widehat{\text{Novelty}}(x)$$
+
+with each term min–max normalised over the candidate pool, defaults **α = 0.50, β = 0.30, γ = 0.20**. A pool of `max(80, 30·count)` unseen safe candidates is drawn (seeded Optuna random sampler); the highest-scoring candidate is selected, and novelty is recomputed after each pick so batches are diversified. Every selection stores its score breakdown and a human-readable reason (`reason_code` `MODEL` or `STARTUP`).
+
+**Warm start.** Until enough trainable observations exist (4 in service runs), the planner picks novelty-maximising random safe candidates (`STARTUP`), so the model is never fitted on a handful of points.
+
+### 45.5 Ablation presets (RQ-T3)
+
+| Preset | α | β | γ | Question answered |
+|---|---:|---:|---:|---|
+| `extra_trees` (full) | 0.50 | 0.30 | 0.20 | Baseline for the proposed method |
+| `ablation_no_uncertainty` | 0.70 | 0.00 | 0.30 | Does uncertainty help? |
+| `ablation_no_novelty` | 0.65 | 0.35 | 0.00 | Does novelty help? |
+| `ablation_no_failure_prob` | 0.00 | 0.60 | 0.40 | Is failure-probability guidance needed beyond exploration? |
+
+Custom `alpha/beta/gamma` may be supplied per run.
+
+### 45.6 Baselines
+
+`random`, `grid`, `tpe` (Optuna TPE), `coverage` (space-filling). All strategies run through the same service loop, on the same device, with the same seed and budget, through the same oracle.
+
+### 45.7 Determinism and provenance
+
+Every run stores `strategy`, `seed`, `budget`, `alpha/beta/gamma`, `safety_policy_version`, and a `model_version` (per-step versions `…-stepN`); `ahft_models` records algorithm and hyper-parameters (`nTrees`, `warmupTrials`). Given the same seed and simulator noise seed, a run reproduces exactly.
+
+### 45.8 Limitations (to be stated in the report)
+
+- ExtraTrees uncertainty is a heuristic, not a calibrated posterior.
+- With six variables and seeded defects the space is small; a grid may win — and that would be a legitimate result.
+- Simulated results do not predict real-hardware effect sizes.
+- Signature bucketing influences "unique failures".
+
+---
+
+## 46. Safety, integrity and audit
+
+| Control | Mechanism |
+|---|---|
+| No silent clamping | Out-of-range values are rejected, never adjusted; both PC and DUT validate |
+| Strict typing | Integers only for integer fields; no bool-as-int |
+| Dual validation | PC rejects before sending; DUT may still reject (`DUT_REJECTED`) |
+| Single active experiment | `active_experiment_id` on the device row marks the running experiment |
+| Operator stop | `POST /api/experiments/{id}/stop` → `STOP` |
+| Rejected/aborted/comm results never train the model | Label `none` |
+| Append-only audit | `ahft_events` has SQL triggers that abort `UPDATE`/`DELETE` |
+| Policy provenance | Every run stores `safety_policy_version` (`ahft-v1.0-strict-bounds`) |
+| Authentication | `/api/*` routes are `human` routes: operator token + actor name; the browser never sees the token |
+| Honest language | Dashboard and reports use "counterexample found" / "no failure found within budget", never "proven safe" |
+
+Event severities: `INFO`, `WARN`, `ERROR`, `SAFETY`. Notable event types: `SAFETY_REJECTED`, `EXPERIMENT_SENT`, `EXPERIMENT_<OUTCOME>`, `SUMMARY_DISCREPANCY`, `SERIAL_CONNECT_FAILED`, `CAPABILITY_FETCH_ERROR`, `DEVICE_CONFIGURED`, `PING`, `RUN_STARTED`, `RUN_COMPLETED`.
+
+> Feature 1 adds **no new electrical hazard**: it does not change supply voltage or drive external loads; hazards remain those of USB-powered ESP32 bench work. The Part I hazard analysis (§14.5) applies once rail control is introduced.
+
+---
+
+## 47. Data model and persistence
+
+```mermaid
+erDiagram
+    ahft_devices ||--o{ ahft_runs : "runs on"
+    ahft_devices ||--o{ ahft_experiments : "executes"
+    ahft_runs ||--o{ ahft_experiments : "contains"
+    ahft_experiments ||--o{ ahft_sample_records : "raw samples"
+    ahft_experiments ||--|| ahft_summaries : "verdict"
+    ahft_runs ||--o{ ahft_events : "audit"
+    ahft_runs ||--o{ ahft_models : "model versions"
+```
+
+| Table | Key columns | Purpose |
+|---|---|---|
+| `ahft_devices` | `device_id`, `model`, `serial_port`, `mode` (`sim`/`serial`), `firmware_version`, `capabilities_json`, `boot_id`, `reset_reason`, `connected`, `active_experiment_id`, `fault_config_json` | Device registry and live state |
+| `ahft_runs` | `run_id`, `strategy`, `seed`, `budget`, `alpha/beta/gamma`, `safety_policy_version`, `model_version`, `status`, `start/end_time` | One adaptive/baseline strategy run |
+| `ahft_experiments` | `experiment_id`, `run_id`, `requested_config_json`, `accepted_config_json`, `status`, `model_version`, `acquisition_json`, `is_simulated`, timestamps | One experiment; requested vs accepted config both kept |
+| `ahft_sample_records` | PK (`experiment_id`, `is_warmup`, `sequence_number`), `scheduled_us`, `actual_us`, `execution_us`, `sensor_value`, `read_success`, `error_code`, `boot_id` | Immutable raw microsecond evidence |
+| `ahft_summaries` | `firmware_summary_json`, `recomputed_summary_json`, `timing/sensor/health_stats_json`, `discrepancies_json`, `outcome`, `failure_label`, `failure_class`, `failure_signature`, `reason` | Firmware vs PC summaries and the verdict |
+| `ahft_events` | `event_type`, `message`, `severity`, `detail_json`, `timestamp` (append-only) | Safety and protocol audit log |
+| `ahft_models` | `model_version`, `algorithm`, `hyperparameters_json`, `training_dataset_id` | Model provenance |
+
+Migration #2 in `activequal/storage/schema.py` creates these tables; migration #1 (campaign/episode model) is untouched.
+
+---
+
+## 48. REST / SSE API
+
+All routes are under `/api/*` on the control plane (loopback) and are reachable from the browser only through the Console proxy, which allow-lists the paths and query parameters and injects the operator token server-side.
+
+| Method | Route | Purpose |
+|---|---|---|
+| GET | `/api/devices` | List devices with live state |
+| GET | `/api/devices/{id}/capabilities` | Fetch (and refresh) capability envelope |
+| POST | `/api/devices/{id}/ping` | `PING`/`PONG` |
+| POST | `/api/devices/{id}/configure` | Set `mode` (`sim`/`serial`), `serial_port`, `baud`, `fault_config` |
+| GET / POST | `/api/experiments` | List (`?run_id=`) / submit one experiment |
+| GET | `/api/experiments/{id}` | Experiment with summaries, verdict, discrepancies |
+| POST | `/api/experiments/{id}/stop` | Operator abort |
+| GET | `/api/experiments/{id}/samples` | Raw samples (`?include_warmup=`; CSV export supported) |
+| GET / POST | `/api/runs` | List / start an adaptive or baseline strategy run |
+| GET | `/api/runs/{id}` | Run with its experiments |
+| GET | `/api/runs/{id}/metrics` | Experiments-to-first-failure, unique signatures, discovery curve |
+| GET | `/api/adaptive/preview` | Scored candidates with `P`, `U`, `Novelty`, `A` and reasons |
+| GET | `/api/events` | Audit log; `text/event-stream` (SSE) with `?after=` resume |
+
+Errors reuse the control-plane envelope `{"error":{"code","message","details"}}`; validation problems and unknown resources use the standard invalid/not-found errors. A rejected experiment is **not** an HTTP error: it is a stored result with `status: REJECTED` and structured `rejections`.
+
+**Run metrics** (`/api/runs/{id}/metrics`): `total_failures`, `unique_failure_signatures_count`, `unique_failure_classes`, `experiments_to_first_failure`, `time_to_first_failure_ms` (cumulative `duration_ms + warmup_ms` of experiments up to and including the first failure — *experiment time, not wall-clock*), `mean_deadline_miss_rate`, `max/mean_jitter_ms`, and `discovery_curve` (`step`, `unique_failures`, `total_failures`).
+
+---
+
+## 49. Operator dashboard (`/ahft`)
+
+The page is part of the existing ChipCheck Console (Next.js 15, React 19, TypeScript), reached from the sidebar and from a link on the Campaigns home page.
+
+| View | Content | Acceptance criteria | API |
+|---|---|---|---|
+| **A. Device & connection status** | Mode (sim/serial), port, firmware, protocol, `boot_id`, reset reason, capability table, ping, fault-injection toggles | Shows simulated mode clearly; ping updates the event log; failed serial connect shows an error, not a stale "connected" | `/api/devices*` |
+| **B. Experiment configuration** | Form for the six variables with capability hints; submit | Out-of-range input shows structured rejection reasons; nothing is clamped; accepted run appears in D | `POST /api/experiments` |
+| **C. Live experiment monitor** | Active experiment state, progress, stop button | Stop produces `ABORTED`; state reflects device `active_experiment_id` | `/api/experiments`, `/stop`, `/api/events` |
+| **D. Results, raw telemetry & export** | Outcome badge, signature, reason, firmware-vs-PC metrics, discrepancy flags, microsecond charts, CSV/JSON export | Warm-up toggle; discrepancy visibly flagged; exports match the database | `/api/experiments/{id}`, `/samples` |
+| **E. Adaptive testing & surrogate** | Strategy, seed, budget, α/β/γ, ablation presets, candidate preview table with `P`, `U`, `Novelty`, `A`, reasons | Same seed → same preview; run result lists every experiment with its acquisition | `/api/adaptive/preview`, `/api/runs` |
+| **F. Research comparison** | Strategy-vs-strategy metrics and discovery curves | Strategies compared at identical budget/seed; metrics match §48 | `/api/runs*` |
+| **G. Safety & protocol audit log** | Chronological events, severity, live SSE | Append-only; rejected configurations appear as `SAFETY` | `/api/events` |
+
+Design constraint: the dashboard must display **both** firmware-reported and PC-recomputed values wherever they exist; the PC value is labelled authoritative.
+
+---
+
+## 50. Requirements for Feature 1
+
+### 50.1 Functional requirements
+
+| ID | Requirement | Priority | Status |
+|---|---|---|---|
+| FR-T-01 | Versioned JSONL protocol with `PING`, `GET_CAPABILITIES`, `EXECUTE`, `STOP` | Must | Implemented (sim); hardware pending |
+| FR-T-02 | Capability handshake defines all limits; PC and DUT both validate | Must | Implemented |
+| FR-T-03 | No silent clamping; structured, multi-reason rejections | Must | Implemented + tested |
+| FR-T-04 | Raw µs sample record per release in the ESP32 clock domain | Must | Implemented (sim); firmware pending |
+| FR-T-05 | Warm-up samples excluded from all statistics | Must | Implemented + tested |
+| FR-T-06 | PC recomputes all summary metrics from raw samples | Must | Implemented + tested |
+| FR-T-07 | Firmware-vs-PC discrepancy detection with documented tolerances | Must | Implemented + tested |
+| FR-T-08 | Frozen deadline oracle `completion > scheduled + deadline·1000` | Must | Implemented + tested |
+| FR-T-09 | Failure taxonomy; `SENSOR_FAULT` separate from timing failures; non-trainable outcomes excluded | Must | Implemented |
+| FR-T-10 | Reproducible failure signatures | Must | Implemented |
+| FR-T-11 | Leakage-free ExtraTrees planner with `A(x)=αP+βU+γN`, warm start, reasons | Must | Implemented + tested |
+| FR-T-12 | Ablation presets and baselines on the same loop | Must | Implemented + tested |
+| FR-T-13 | SQLite persistence of devices, runs, experiments, samples, summaries, events, models | Must | Implemented |
+| FR-T-14 | REST + SSE API for all dashboard views | Must | Implemented + tested |
+| FR-T-15 | Dashboard Views A–G | Must | Implemented; browser E2E pending |
+| FR-T-16 | CSV/JSON export of raw samples | Should | Implemented |
+| FR-T-17 | Deterministic simulator with fault injection | Must | Implemented |
+| FR-T-18 | Switch simulator ↔ serial via device configuration only | Must | Implemented; untested on hardware |
+| FR-T-19 | Operator stop of a running experiment | Should | Implemented |
+| FR-T-20 | Append-only audit log | Must | Implemented (DB triggers) |
+
+### 50.2 Non-functional requirements
+
+| ID | Requirement | Target | Status |
+|---|---|---|---|
+| NFR-T-01 | Rejected configurations executed | exactly 0 | Verified in simulation |
+| NFR-T-02 | Determinism in simulation | identical output for identical seeds | Tested |
+| NFR-T-03 | Metric reproducibility | PC recomputation matches firmware within §43.3 tolerances on a clean run | Tested in simulation |
+| NFR-T-04 | Frame limits | ≤ 65 536 B per frame | Enforced |
+| NFR-T-05 | Import boundaries | Model/decision layers dependency-clean | Enforced by test |
+| NFR-T-06 | Timing resolution | 1 µs | Hardware-dependent; verify in §53 |
+| NFR-T-07 | Serial-induced measurement perturbation | None inside timed body | Hardware-team verification |
+| NFR-T-08 | Auth | Token never exposed to browser | Existing proxy tests |
+
+---
+
+## 51. Research evaluation protocol for Feature 1
+
+### 51.1 Research questions
+
+| ID | Question | Hypothesis (to be pre-registered before final runs) |
+|---|---|---|
+| RQ-T1 | Does the full adaptive strategy reach the first timing failure in fewer experiments than random and grid at equal budget? | Median experiments-to-first-failure is lower than random by ≥ 30 % (a hypothesis to test; may be rejected) |
+| RQ-T2 | Does it find more *distinct* failure signatures per budget? | Higher unique-signature count at budgets 15/30/50 |
+| RQ-T3 | Which acquisition term matters (ablations)? | Removing `P(fail)` hurts most; removing novelty lowers diversity |
+| RQ-T4 | Are firmware self-reports trustworthy? | Discrepancy rate on healthy hardware ≈ 0; injected corruption always detected |
+| RQ-T5 | Do simulator conclusions transfer to hardware? | Exploratory; report as such |
+
+### 51.2 Protocol
+
+- Strategies: `extra_trees`, three ablations, `random`, `grid`, `tpe`, `coverage`.
+- Budgets: 15, 30, 50 (service allows 1–100). ≥ 30 independent seeds per strategy per budget where time allows.
+- Same device, fault configuration, simulator noise-seed policy, and oracle for all strategies; randomise strategy order on hardware.
+- Freeze signature bucketing, tolerances and oracle thresholds **before** the final evaluation.
+- Report simulator and hardware results separately.
+
+### 51.3 Metrics
+
+Primary: discovery rate at budget; experiments-to-first-failure (right-censored at budget); unique failure signatures; time-to-first-failure in experiment-time. Secondary: mean deadline-miss rate and jitter of executed experiments, rejected-config count, discrepancy count, planner compute time.
+
+### 51.4 Statistics
+
+Median/IQR with 95 % bootstrap CIs; Kaplan–Meier curves for censored time-to-failure; paired comparison on matched seeds; effect sizes; state the primary metric; publish all seeds and raw logs; no tuning on held-out configurations after seeing results (as in Part I §21.7).
+
+### 51.5 Threats to validity
+
+| Threat | Mitigation |
+|---|---|
+| Seeded defects make the problem artificial | Disclose; add hardware-only runs; never pool with simulation |
+| Small search space favours grid | Report honestly |
+| Signature bucketing alters "unique" counts | Freeze before evaluation; report sensitivity |
+| Calibrated work units differ across boards | Calibrate per board; record calibration |
+| USB/serial scheduling noise on host | Timestamps come from the ESP32 clock; host timing is never used for metrics |
+| Thermal/state drift on hardware | Reference experiment between blocks; log `boot_id` and reset reasons |
+
+---
+
+## 52. Verification and validation status
+
+### 52.1 Automated test inventory
+
+| Suite | Scope | Result at 12 Nov 2026 |
+|---|---|---|
+| `activequal/service/tests/test_ahft_v1.py` | M0 validation without clamping; M1/M2 serial bridge vs PC recomputation; M2 discrepancy + deadline oracle; M5 ExtraTrees + ablation; M3/M6 API + CSV export | Pass |
+| `activequal/tests/test_boundaries.py` | Layering rules | Pass |
+| Database tests | Migration #2 | Pass |
+| Full Python suite (`unittest discover`) | All backend tests, including the existing 12 000-case safety negative generator (0 approved) | **473 tests, OK (1 skipped)** |
+| Console typecheck (`tsc --noEmit`) | All TypeScript including `/ahft` | Pass |
+| Console production build (`next build`) | 10 static pages; `/ahft` route 8.9 kB | Pass |
+| Console unit tests (`npm test`) | Existing 4 test files plus one new proxy test | **Could not run**: the installed Node 22.22.1 lacks TypeScript type-stripping (`ERR_UNKNOWN_FILE_EXTENSION`). Needs a Node build with type-stripping or a TS loader |
+
+### 52.2 Known test gaps and defects found while documenting
+
+1. The added Console proxy test uses the path `/api/capabilities`, which is **not** an allow-listed route (the real route is `/api/devices/{id}/capabilities`). The test has never been executed and should be corrected before merge.
+2. The Console unit tests cannot run in the current environment (see above).
+3. No test exercises `PySerialLineTransport` against a real or virtual serial port.
+4. No test exercises the Console proxy's `/api/*` query-parameter allow-list for all routes.
+
+### 52.3 How to run
+
+```bash
+# backend
+.venv/bin/python -m unittest discover -s activequal -t .
+
+# console (from activequal/console/ui)
+npm ci && npx tsc --noEmit && npm run build
+
+# control plane (loopback) - config file with operator token (>= 24 chars) and reviewer hash
+ACTIVEQUAL_CONFIG=/path/to/control-plane.json .venv/bin/python -m activequal.service.app --port 8001
+
+# console
+ACTIVEQUAL_CONTROL_PLANE_URL=http://127.0.0.1:8001 \
+ACTIVEQUAL_OPERATOR_TOKEN_FILE=/path/to/operator.token \
+npm run start -- -p 3000 -H 127.0.0.1
+# then open http://127.0.0.1:3000/ahft and enter an operator name in the top bar
+```
+
+### 52.4 Pending browser verification checklist
+
+1. Open `/ahft`; confirm View A shows simulated mode and capabilities, and ping works.
+2. Submit a nominal experiment (e.g., 50 ms interval, load 10) → `PASS`.
+3. Submit a defect-A configuration (interval 10, load 70) → `TIMING_FAILURE` with signature.
+4. Submit a defect-C configuration (interval 5, load 95) → `WATCHDOG_RESET`.
+5. Submit an out-of-range configuration → rejection reasons, no execution, `SAFETY` event.
+6. Enable `corrupt_firmware_summary` → discrepancy flags appear.
+7. Run `extra_trees` and `random` at equal budget/seed; confirm View F comparison and discovery curves.
+8. Export CSV/JSON; spot-check against the database.
+9. Confirm the audit log (View G) streams new events live.
+
+---
+
+## 53. Hardware bring-up and integration plan
+
+### 53.1 Checklist for connecting the real ESP32
+
+| # | Step | Owner | Evidence |
+|---|---|---|---|
+| 1 | Flash AHFT V1 firmware; confirm `firmware_version` and `protocol_version = 1` | HW | `GET_CAPABILITIES` transcript |
+| 2 | Confirm module model and update `model` field (D-1) | HW | Capability response |
+| 3 | Verify GPIO 34/35 wiring, ADC range, 12-bit raw values for LDR and POT | HW | Raw sample CSV |
+| 4 | Calibrate `task_load` so work units are reproducible; record the calibration | HW | Calibration table |
+| 5 | Confirm all three timestamps use one monotonic µs clock | HW | Code review + captured samples |
+| 6 | Confirm serial output does not run in the timed region | HW | Side-by-side runs with/without logging |
+| 7 | `POST /api/devices/esp32-dut-01/configure {"mode":"serial","serial_port":"/dev/ttyUSB0"}` | SW | Device row `connected = 1`, simulated = false |
+| 8 | `PING`, `GET_CAPABILITIES` via dashboard | SW | Event log |
+| 9 | Run the nominal experiment ×10; check PC vs firmware discrepancy rate ≈ 0 | Joint | Discrepancy count |
+| 10 | Verify rejection symmetry: send out-of-range values; both PC and DUT reject | Joint | `SAFETY_REJECTED` and `DUT_REJECTED` cases |
+| 11 | `STOP` mid-run → `STOP_ACK`, `ABORTED` | Joint | Transcript |
+| 12 | Induce and observe a real reset; verify `boot_id` change → `WATCHDOG_RESET` | Joint | Event + summary |
+| 13 | Unplug USB mid-run → `COMM_ERROR`, no training row | Joint | Summary |
+| 14 | Repeat one config ×N to estimate real run-to-run variability | Joint | Table for the report |
+
+### 53.2 Acceptance gate
+
+Real-hardware evaluation may begin only when steps 1–13 pass. Until then every dashboard result is simulated.
+
+---
+
+## 54. Milestones (M0–M8) and status
+
+| Milestone | Content | Status |
+|---|---|---|
+| M0 | Typed contracts and validation, no silent clamping | Done |
+| M1 | JSONL bridge, simulator, `InMemoryJsonlWire` | Done |
+| M2 | PC recomputation, discrepancy detection, deadline oracle | Done |
+| M3 | Persistence and REST/SSE API | Done |
+| M4 | Fault injection and safety rejection paths | Done |
+| M5 | ExtraTrees planner, ablations, baselines | Done |
+| M6 | Dashboard, exports, strategy comparison | Done (build verified; browser E2E pending) |
+| M7 | Hardware bring-up and real-device acceptance (§53) | **Not started** |
+| M8 | Frozen evaluation + project report | **Not started** |
+
+> The M0–M6 labels follow the milestone tags used in the implementation's test names. If the hardware team's handoff numbers milestones differently, align this table to the handoff.
+
+---
+
+## 55. Decisions, open issues and risks
+
+### 55.1 Decisions to confirm
+
+| ID | Decision | Default taken | Owner |
+|---|---|---|---|
+| D-1 | Actual ESP32 module (WROOM-32 vs S3) | WROOM-32 per handoff capabilities | HW |
+| D-2 | Jitter definition | Sample SD (ddof = 1) of inter-sample intervals | Joint |
+| D-3 | Deadline anchor | Scheduled release time | Joint (frozen) |
+| D-4 | Signature bucket widths | 10 ms interval, 20-unit load, 10 % severity split | Joint |
+| D-5 | Excessive-jitter threshold | `max(1.5 ms, 25 % of interval)` | Joint |
+| D-6 | Discrepancy tolerances | 0.05 ms, 0.002 miss-rate | Joint |
+| D-7 | Treat `SENSOR_FAULT` as label 0 | Yes | Joint |
+| D-8 | Budget cap per strategy run | 100 experiments | SW |
+| D-9 | `time_to_first_failure` meaning | Cumulative experiment time (simulated), not wall-clock | SW |
+
+### 55.2 Risks
+
+| Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| Real firmware timing differs from simulator assumptions | High | Medium | Hardware acceptance gate; report separately |
+| Serial throughput insufficient for 4 096 samples at high rates | Medium | Medium | Buffer then transmit outside timed window; reduce samples |
+| `task_load` not reproducible across boards | Medium | High | Per-board calibration table |
+| Clock rollover/precision issues | Low | High | 64-bit µs clock; verify |
+| Adaptive method does not beat baselines | Medium | Medium | Valid result; document |
+| Unreviewed code in working tree merged | Medium | High | Review, fix test gap (§52.2), run browser checklist (§52.4) |
+
+---
+
+## 56. Traceability
+
+| Requirement | Implementation | Verification |
+|---|---|---|
+| FR-T-02/03 | `activequal/model/ahft.py` `validate_experiment_config` | `test_m0_contract_validation_rejects_out_of_range_without_silent_clamping` |
+| FR-T-01/04 | `activequal/adapter/service/esp32_jsonl.py` | `test_m1_m2_jsonl_serial_bridge_and_pc_recomputation_match` |
+| FR-T-05/06/07/08/09/10 | `activequal/service/timing_oracle.py` | `test_m2_summary_discrepancy_and_deadline_oracle_detected` |
+| FR-T-11/12 | `activequal/decision/service/planners/extra_trees_planner.py`, `ahft_service.create_run` | `test_m5_extra_trees_planner_and_ablation` |
+| FR-T-13/20 | `activequal/storage/schema.py` migration #2 | Database tests |
+| FR-T-14/16/19 | `activequal/service/http_api.py`, `ahft_service.py` | `test_m3_m6_http_api_endpoints_and_csv_export` |
+| FR-T-15 | `activequal/console/ui/src/app/ahft/page.tsx` | Typecheck, build; browser checklist pending |
+| FR-T-17 | `SimulatedEsp32Bridge`, `FaultInjectionConfig` | Bridge and API tests |
+| FR-T-18 | `AhftService.configure_device` | Hardware step 7 pending |
+
+---
+
+## 57. Appendices
+
+### Appendix A — Repository map for Feature 1
+
+| Path | Role |
+|---|---|
+| `activequal/model/ahft.py` | Schemas, capabilities, validation |
+| `activequal/model/examples.py` | `ahft_timing_contract()` search-domain contract |
+| `activequal/adapter/service/esp32_jsonl.py` | Bridge, transports, simulator, fault injection |
+| `activequal/service/timing_oracle.py` | Recompute, verify, classify |
+| `activequal/service/ahft_service.py` | Orchestration, persistence, runs, metrics |
+| `activequal/service/http_api.py` | `/api/*` routes, SSE |
+| `activequal/decision/service/planners/extra_trees_planner.py` | ExtraTrees acquisition |
+| `activequal/storage/schema.py` | Migration #2 |
+| `activequal/console/ui/src/app/ahft/page.tsx` | Dashboard |
+| `activequal/console/ui/src/lib/server/proxy.ts` | `/api/*` allow-list |
+| `activequal/service/tests/test_ahft_v1.py` | Feature tests |
+
+### Appendix B — Mapping this PRD to project-report chapters
+
+| Report chapter | Source in this PRD |
+|---|---|
+| Abstract, introduction, motivation | §1, §4, §5, §37 |
+| Literature survey | §23–§24 |
+| Requirements | §8, §50 |
+| System design | §10, §12, §38, §39 |
+| Protocol and data design | §40–§42, §47 |
+| Algorithms (oracle, ML) | §43, §45 |
+| Implementation | §48, §49, Appendix A |
+| Safety | §14, §46 |
+| Testing and results | §21, §51, §52 |
+| Hardware integration | §53 |
+| Risks, limitations, future work | §25, §32, §55 |
+
+### Appendix C — Glossary additions
+
+| Term | Meaning |
+|---|---|
+| **Release** | One scheduled periodic task activation |
+| **Warm-up** | Initial window of samples excluded from statistics |
+| **Start lateness** | `actual_time_us − scheduled_time_us` |
+| **Completion time** | `actual_time_us + execution_time_us` |
+| **Deadline miss** | `completion_time_us > scheduled_time_us + deadline_ms·1000` |
+| **Jitter** | Sample standard deviation of inter-sample intervals |
+| **Signature** | Bucketed identifier for a distinct failure mode |
+| **Discrepancy** | Disagreement between firmware summary and PC recomputation |
+| **Calibrated work unit** | Hardware-team-defined unit of synthetic CPU load |
+| **boot_id** | Identifier of the current firmware boot; change implies reset |
+| **Simulated run** | Result produced by the simulator; labelled `is_simulated` |
+
+---
+
+*End of PRD v2.0 draft — awaiting team confirmation before further implementation changes.*
