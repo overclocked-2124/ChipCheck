@@ -20,6 +20,8 @@
 \usetikzlibrary{positioning,arrows.meta,fit,backgrounds,calc,shapes.geometric}
 \usepackage[hidelinks]{hyperref}
 \usepackage{tocloft}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.16}
 \renewcommand{\cftsecleader}{\cftdotfill{\cftdotsep}}
 \setlength{\cftbeforesecskip}{3pt}
 
@@ -70,7 +72,7 @@
 \begin{tikzpicture}[remember picture,overlay]\draw[line width=2.5pt] ([shift={(1.5cm,1.5cm)}]current page.south west) rectangle ([shift={(-1.5cm,-1.5cm)}]current page.north east);\end{tikzpicture}
 \begin{center}
 \vspace*{0.6cm}
-{\bfseries\fontsize{14}{17}\selectfont Department of Information Science \& Engineering}\\[1.4cm]
+{\bfseries\fontsize{14}{17}\selectfont RV College of Engineering}\\[1.4cm]
 {\itshape\color{gtext}\Large Experiential Learning (EL)}\\[0.5cm]
 {\Large SDG 9 -- Industry, Innovation \& Infrastructure}\\[0.7cm]
 \end{center}
@@ -82,13 +84,13 @@
 \setlength{\parskip}{0pt}
 {\setlength{\fboxrule}{0.4pt}\noindent\hspace{-0pt}\begin{tabular}{|>{\raggedright\arraybackslash\bfseries\small}p{\dimexpr0.31\linewidth-12.4pt\relax}|p{\dimexpr0.69\linewidth-12.8pt\relax}|}
 \hline
-Title of Project: & {\hyphenpenalty=10000 \exhyphenpenalty=10000 ChipCheck: AI-Driven Adaptive Physical Testing for Embedded Systems (Adaptive Hardware Fuzzing Testbench)} \\ \cline{2-2}
+Title of Project: & {\hyphenpenalty=10000 \exhyphenpenalty=10000 AI-Driven Adaptive Physical Testing for Embedded Systems} \\ \cline{2-2}
 Team No.: & 29 \\ \cline{2-2}
 Student Name(s): & Kavin Krishnan C\newline Chinmai Kiran Shetti\newline Sumukha Upadhyaya\newline Snehal Reddy Thadigotla\newline Sutej R Haritsa \\ \cline{2-2}
 USN / Reg. No.: & 1RV24CS126\newline 1RV24CS068\newline 1RV24IS130\newline 1RV24IS126\newline 1RV24CY055 \\ \cline{2-2}
 Guide: & Dr. H K Krishappa \\ \cline{2-2}
-Semester and Section: & Vth Semester [section to be filled] \\ \cline{2-2}
-Date of Submission: & 12 / 11 / 2026 \\ \hline
+Semester: & Vth Semester \\ \cline{2-2}
+Date of Submission: & 13 / 11 / 2026 \\ \hline
 \end{tabular}}
 
 \vspace{-0.2cm}
@@ -97,11 +99,13 @@ Date of Submission: & 12 / 11 / 2026 \\ \hline
 \newpage
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[R]{\small ChipCheck: Adaptive Hardware Fuzzing Testbench}
+\fancyhead[L]{\raisebox{-0.25cm}{\includegraphics[height=0.95cm]{figures/rvce-logo.png}}}
+\fancyhead[R]{\small AI-Driven Adaptive Physical Testing for Embedded Systems}
 \fancyfoot[C]{\small\thepage}
 \renewcommand{\headrulewidth}{0.8pt}
 \renewcommand{\footrulewidth}{0.8pt}
-\setlength{\headheight}{14.5pt}
+\setlength{\headheight}{30pt}
+\addtolength{\topmargin}{-15.5pt}
 \pagenumbering{roman}
 \setcounter{tocdepth}{1}
 \setstretch{1.15}
@@ -138,7 +142,7 @@ RQ & Research Question \\ \hline
 
 \purpsec{1. Abstract}
 \dredrule
-Embedded products fail under particular combinations of operating conditions such as supply voltage, workload, peripheral state and event timing. These combinations are rare among all possible ones, and testing every one of them on real hardware is too slow. Random testing wastes experiments in regions where the device already behaves correctly. This project builds ChipCheck, a safety-constrained Adaptive Hardware Fuzzing Testbench (AHFT) that uses the results of earlier physical experiments to choose the next one.
+Embedded products fail under particular combinations of operating conditions such as supply voltage, workload, peripheral state and event timing. These combinations are rare among all possible ones, and testing every one of them on real hardware is too slow. Random testing wastes experiments in regions where the device already behaves correctly. This project builds a safety-constrained Adaptive Hardware Fuzzing Testbench (AHFT) that uses the results of earlier physical experiments to choose the next one.
 
 An engineer writes a test contract that lists the controllable variables, measurable outputs, legal limits, hard safety limits and the failure requirement. A planner proposes a candidate experiment. A deterministic safety check accepts or rejects it in the backend and again in the bench controller. The controller applies the experiment to the device, collects synchronised measurements and returns the setup to a safe state. An independent oracle then labels the result.
 
@@ -389,40 +393,7 @@ B: tight deadline with POT ADC stalls & POT sensor, load $\ge$ 50, deadline $\le
 C: watchdog starvation & interval $\le$ 5 ms and load $\ge$ 90 & Watchdog reset, new boot identifier \\ \hline
 \end{longtable}
 
-\bluesub{5.5 Operator Console}
-The researcher works through the console. It lists campaigns and their state, shows each approved contract with its requirements, observations and safety limits, shows the bench's health and safety state, follows a running campaign live with its outcome timeline and event log, and compares planners on the same contract. Figures 5.5 to 5.9 are screenshots of the console running a demonstration campaign of the OLED rig on the simulated bench with dummy data (a TPE campaign and a random campaign on the same contract).
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.93\linewidth]{figures/crop-console-1.png}\\[2pt]
-{\setstretch{1}\small\itshape Figure 5.5: Console: campaign list with state, planner, fixture, budget use and outcome counts.}
-\end{figure}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.93\linewidth]{figures/crop-console-2.png}\\[2pt]
-{\setstretch{1}\small\itshape Figure 5.6: Console: an approved contract showing forbidden combinations, requirements, observations with their uncertainties and the hard safety limits.}
-\end{figure}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.93\linewidth]{figures/crop-console-3.png}\\[2pt]
-{\setstretch{1}\small\itshape Figure 5.7: Console: the outcome timeline of a finished campaign (passes, failures, invalid episodes, and hollow marks for verification episodes) above the event log.}
-\end{figure}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.93\linewidth]{figures/crop-console-results.png}\\[2pt]
-{\setstretch{1}\small\itshape Figure 5.8: Console: results of a finished campaign. A counterexample is reported with its reproduction count, the violated requirement and the original and minimised conditions, and a failure injected on purpose is labelled as seeded.}
-\end{figure}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.93\linewidth]{figures/crop-console-4.png}\\[2pt]
-{\setstretch{1}\small\itshape Figure 5.9: Console: comparison of planners on one contract. Episodes to the first confirmed failure are right-censored at the budget, so a campaign that found nothing in 50 episodes is shown as censored and not dropped.}
-\end{figure}
-
-\bluesub{5.6 Implementation Plan (Phase-wise)}
+\bluesub{5.5 Implementation Plan (Phase-wise)}
 \par\nopagebreak\noindent{\setstretch{1}\small\bfseries Table 5.4: Implementation plan}\par\nopagebreak\vspace{2pt}
 \renewcommand{\arraystretch}{1.4}
 \begin{longtable}{|>{\centering\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.07\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.26\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.43\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.11\linewidth}|}
@@ -437,7 +408,7 @@ VI & Documentation \& Reporting & Freeze code and hardware, archive raw data wit
 \end{longtable}
 
 \Needspace{9\baselineskip}
-\bluesub{5.7 Tools \& Technologies}
+\bluesub{5.6 Tools \& Technologies}
 \par\nopagebreak\noindent{\setstretch{1}\small\bfseries Table 5.5: Tools and technologies}\par\nopagebreak\vspace{2pt}
 \renewcommand{\arraystretch}{1.6}
 \begin{longtable}{|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\bfseries}p{0.30\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.60\linewidth}|}
@@ -453,7 +424,7 @@ Other Tools & Deterministic ESP32 simulator and fault-injection switches; CSV an
 \end{longtable}
 
 \Needspace{12\baselineskip}
-\bluesub{5.8 Risk Analysis and Mitigation}
+\bluesub{5.7 Risk Analysis and Mitigation}
 \par\nopagebreak\noindent{\setstretch{1}\small\bfseries Table 5.6: Project risks and mitigation}\par\nopagebreak\vspace{2pt}
 \renewcommand{\arraystretch}{1.4}
 \begin{longtable}{|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small\bfseries}p{0.30\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.60\linewidth}|}
@@ -469,11 +440,136 @@ Signature bucket widths change the count of unique failures & Freeze them before
 Unreviewed code reaches the bench & Code review, boundary tests, the verification checklist and the safety acceptance suite \\ \hline
 \end{longtable}
 
-\redsec{6. Expected Outcomes \& Deliverables}
+\redsec{6. Partial Results}
+\dredrule
+The results below were produced on 13 November 2026 with the simulated bench and the project's own tools. They show that the experiment loop, the safety checks, the planners and the Console work end to end in simulation. Nothing in this section was measured on a physical ESP32: hardware campaigns start after the bring-up checklist passes.
+
+\bluesub{6.1 Implementation Status and Verification}
+\par\nopagebreak\noindent{\setstretch{1}\small\bfseries Table 6.1: Verification summary}\par\nopagebreak\vspace{2pt}
+\renewcommand{\arraystretch}{1.4}
+\begin{longtable}{|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small\bfseries}p{0.32\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.58\linewidth}|}
+\hline
+\rowcolor{ghead}\bfseries Item & \bfseries Result \\ \hline
+Automated test suite & 468 tests, all passing (71 s), including the safety negative cases and the import-boundary rules \\ \hline
+Planner benchmark & 500 simulated campaigns (5 planners $\times$ 5 profiles $\times$ 20 campaigns, budget 50 experiments, seed 42) \\ \hline
+Console demonstration & 4 campaigns completed on one approved contract and fixture (TPE seeds 42 and 11, random seeds 7 and 12) \\ \hline
+Safety & 0 rejected configurations executed; 0 candidates refused in the demonstration campaigns \\ \hline
+Failure evidence & Seeded failure reproduced 2 of 2 times and reduced to a smaller set of conditions, with the original and minimised conditions stored \\ \hline
+\end{longtable}
+
+Completed so far: the contract validation and two-layer safety check; the Backend, Controller and simulated bench running full campaigns; random, grid, coverage and TPE planners on one loop; failure confirmation and minimisation with an evidence report; and the Console. In progress: the ESP32 timing pipeline (oracle, ExtraTrees planner and dashboard views) and its browser verification. Not started: firmware bring-up and hardware campaigns.
+
+\bluesub{6.2 Planner Benchmark on the Simulator}
+Each planner was driven through the same decision interface on five simulated benchmark profiles: B1a and B1b (a gradient island near 3.25 V whose precursor is partly, or only in the target LED state, visible), B1w (a wider island), B2 (a reset cliff with no precursor) and B3 (no fault). A campaign counts as a success if it found a failure within the budget. Figure 6.1 and Table 6.2 give the share of 20 campaigns per cell that succeeded within 50 experiments.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[ybar, bar width=6.5pt, width=0.96\linewidth, height=6.4cm, ymin=0, ymax=112, ylabel={Campaigns with a failure found (\%)},
+  symbolic x coords={B1a,B1b,B1w,B2,B3}, xtick=data, enlarge x limits=0.13, ymajorgrids, grid style={gray!25},
+  legend style={at={(0.5,-0.14)},anchor=north,legend columns=4,draw=none,font=\small},
+  nodes near coords, every node near coord/.append style={font=\tiny}, tick label style={font=\small}]
+\addplot[fill=black,draw=black] coordinates {(B1a,85)(B1b,80)(B1w,100)(B2,15)(B3,0)};
+\addplot[fill=gray!55,draw=black] coordinates {(B1a,10)(B1b,30)(B1w,60)(B2,15)(B3,0)};
+\addplot[fill=gray!20,draw=black] coordinates {(B1a,20)(B1b,25)(B1w,55)(B2,40)(B3,0)};
+\addplot[fill=white,draw=black] coordinates {(B1a,35)(B1b,45)(B1w,80)(B2,25)(B3,0)};
+\legend{TPE (adaptive), Random, Grid, Coverage}
+\end{axis}
+\end{tikzpicture}\\[2pt]
+{\setstretch{1}\small\itshape Figure 6.1: Campaigns that found a failure within 50 experiments, by planner and simulated profile (20 campaigns per cell).}
+\end{figure}
+
+\par\nopagebreak\noindent{\setstretch{1}\small\bfseries Table 6.2: Success within 30 and within 50 experiments (percent of 20 campaigns)}\par\nopagebreak\vspace{2pt}
+\renewcommand{\arraystretch}{1.4}
+\begin{longtable}{|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small\bfseries}p{0.14\linewidth}|>{\centering\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.17\linewidth}|>{\centering\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.17\linewidth}|>{\centering\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.17\linewidth}|>{\centering\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.17\linewidth}|}
+\hline
+\rowcolor{ghead}\bfseries Profile & \bfseries TPE & \bfseries Random & \bfseries Grid & \bfseries Coverage \\ \hline
+B1a & 65 / 85 & 10 / 10 & 20 / 20 & 20 / 35 \\ \hline
+B1b & 55 / 80 & 25 / 30 & 15 / 25 & 30 / 45 \\ \hline
+B1w & 90 / 100 & 40 / 60 & 25 / 55 & 60 / 80 \\ \hline
+B2 & 15 / 15 & 5 / 15 & 15 / 40 & 5 / 25 \\ \hline
+B3 (no fault) & 0 / 0 & 0 / 0 & 0 / 0 & 0 / 0 \\ \hline
+\end{longtable}
+
+TPE reached a failure within 50 experiments in 100\% of campaigns on B1w against 60\% for random, 85\% against 10\% on B1a and 80\% against 30\% on B1b. On B2, where the reset has no measurable precursor, TPE did not beat random (15\% each) and a grid did best (40\%), so the adaptive advantage depends on a precursor being visible. On B3, which has no fault, no planner reported a failure in any of 20 campaigns, so no false failures were raised. A fixed-corner baseline found nothing on any profile. With 20 campaigns per cell the 95\% Wilson intervals are wide (for example TPE on B1w within 50 experiments: 83.9 to 100\%, random: 38.7 to 78.1\%), and the numbers come from a simulator, so they indicate a trend that the repeated-seed evaluation of Section 8 must confirm.
+
+\bluesub{6.3 Operator Console in Operation}
+The screenshots below were taken from the Console running a demonstration of the OLED rig on the simulated bench with dummy data. The Console lists campaigns and their state, shows each approved contract with its requirements, observations and safety limits, follows a running campaign live with its outcome timeline and event log, reports results, and compares planners on the same contract. About 50 further screenshots (arming checklist, live view, episodes, fixtures, manual challenge and a mobile layout) are kept in the project repository.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.93\linewidth]{figures/crop-console-list.png}\\[2pt]
+{\setstretch{1}\small\itshape Figure 6.2: Console: campaign list with four finished campaigns, their state, planner, seed, budget use and outcome counts.}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.93\linewidth]{figures/crop-console-2.png}\\[2pt]
+{\setstretch{1}\small\itshape Figure 6.3: Console: an approved contract showing forbidden combinations, requirements, observations with their uncertainties and the hard safety limits.}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.93\linewidth]{figures/crop-console-3.png}\\[2pt]
+{\setstretch{1}\small\itshape Figure 6.4: Console: the outcome timeline of a finished campaign (passes, failures, invalid episodes, and hollow marks for verification episodes) above the event log.}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.93\linewidth]{figures/crop-console-results.png}\\[2pt]
+{\setstretch{1}\small\itshape Figure 6.5: Console: results of a finished campaign. A counterexample is reported with its reproduction count, the violated requirement and the original and minimised conditions, and a failure injected on purpose is labelled as seeded.}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.93\linewidth]{figures/crop-console-4.png}\\[2pt]
+{\setstretch{1}\small\itshape Figure 6.6: Console: comparison of planners on one contract. Episodes to the first confirmed failure are right-censored at the budget, so a campaign that found nothing in 50 episodes is shown as censored and not dropped.}
+\end{figure}
+
+\par\nopagebreak\noindent{\setstretch{1}\small\bfseries Table 6.3: Console demonstration campaigns (OLED rig, simulated bench)}\par\nopagebreak\vspace{2pt}
+\renewcommand{\arraystretch}{1.4}
+\begin{longtable}{|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small\bfseries}p{0.18\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.24\linewidth}|>{\centering\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.13\linewidth}|>{\centering\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.08\linewidth}|>{\centering\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.09\linewidth}|>{\centering\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.08\linewidth}|}
+\hline
+\rowcolor{ghead}\bfseries Campaign & \bfseries First confirmed failure & \bfseries Discovery used & \bfseries Fail & \bfseries Invalid & \bfseries Pass \\ \hline
+TPE, seed 42 & episode 11 & 11 / 50 & 12 & 2 & 21 \\ \hline
+TPE, seed 11 & episode 25 & 25 / 50 & 12 & 2 & 35 \\ \hline
+Random, seed 7 & episode 7 & 7 / 50 & 12 & 2 & 17 \\ \hline
+Random, seed 12 & none (censored at 50) & 50 / 50 & 0 & 0 & 50 \\ \hline
+\end{longtable}
+
+Failure counts include the verification episodes used to confirm and minimise a failure. One campaign per planner proves nothing: a log-rank test of random against TPE on these four runs gives $p = 0.69$, so no difference is claimed. The repeated seeds of the final evaluation are pre-registered for that purpose.
+
+\bluesub{6.4 Timing Test on the ESP32 Bench Model}
+Figure 6.7 shows the isometric bench model running three experiments of the timing feature. The deadline rule of Section 5.3 is applied to each scheduled task release, and the laptop screen in the model draws how late each task finished against its deadline. The counts in Table 6.4 come from the timing model that drives the figure, not from a physical board.
+
+\begin{figure}[t]
+\centering
+\begin{minipage}{0.325\linewidth}\centering\includegraphics[width=\linewidth]{figures/crop-bench-pass.png}\\{\setstretch{1}\scriptsize\itshape (a) Nominal: PASS}\end{minipage}\hfill
+\begin{minipage}{0.325\linewidth}\centering\includegraphics[width=\linewidth]{figures/crop-bench-defA.png}\\{\setstretch{1}\scriptsize\itshape (b) Seeded defect A: TIMING\_FAILURE}\end{minipage}\hfill
+\begin{minipage}{0.325\linewidth}\centering\includegraphics[width=\linewidth]{figures/crop-bench-defC.png}\\{\setstretch{1}\scriptsize\itshape (c) Seeded defect C: WATCHDOG\_RESET}\end{minipage}\\[4pt]
+{\setstretch{1}\small\itshape Figure 6.7: The bench model in three experiments. Missed deadlines are the dark bars above the dashed deadline line on the laptop screen.}
+\end{figure}
+
+\par\nopagebreak\noindent{\setstretch{1}\small\bfseries Table 6.4: Timing experiments on the bench model (60 scheduled releases)}\par\nopagebreak\vspace{2pt}
+\renewcommand{\arraystretch}{1.4}
+\begin{longtable}{|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small\bfseries}p{0.19\linewidth}|>{\centering\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.10\linewidth}|>{\centering\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.08\linewidth}|>{\centering\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.11\linewidth}|>{\centering\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.12\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small\ttfamily}p{0.21\linewidth}|}
+\hline
+\rowcolor{ghead}\bfseries Experiment & \bfseries Interval & \bfseries Load & \bfseries Deadline & \bfseries Missed & \bfseries\rmfamily Outcome \\ \hline
+Nominal & 50 ms & 10 & 10 ms & 0 of 60 & PASS \\ \hline
+Seeded defect A & 10 ms & 70 & 8 ms & 11 of 60 & TIMING\_FAILURE \\ \hline
+Seeded defect C & 5 ms & 95 & 10 ms & 8 of 9 & WATCHDOG\_RESET \\ \hline
+\end{longtable}
+
+In the defect C run the model stops after nine releases because the simulated watchdog resets the board, which is why the experiment is labelled \texttt{WATCHDOG\_RESET} and not a deadline failure.
+
+\bluesub{6.5 Discussion}
+The partial results support three points. First, the loop is complete in simulation: contract, planner, two safety checks, execution, oracle, confirmation, minimisation and an evidence report all ran without an unsafe execution. Second, on profiles where a failure leaves a measurable precursor, TPE reached a failure in fewer experiments than random, grid and coverage selection. Third, on a profile with no precursor an adaptive method has no advantage, and on a fault-free profile none of the planners raised a false failure. The limits are equally clear: the results are simulated, the sample sizes are small, the ESP32 timing pipeline is still being integrated, and no physical measurement has been made yet.
+
+\redsec{7. Expected Outcomes \& Deliverables}
 \dredrule
 Upon successful completion of this project, the following outcomes are expected:
 
-\purpsub{6.1 Technical Outcomes}
+\purpsub{7.1 Technical Outcomes}
 \begin{itemize}
 \item\relax A working testbench in which every candidate passes two independent safety checks, with zero rejected configurations executed in all campaigns.
 \item\relax A JSON-Lines protocol and an ESP32 bring-up that return microsecond raw samples, with the PC recomputation agreeing with the firmware summary within the stated tolerances (0.05 ms for mean interval and jitter, 0.002 for miss rate) on a clean run, and a corrupted summary always detected.
@@ -481,15 +577,15 @@ Upon successful completion of this project, the following outcomes are expected:
 \item\relax A console with seven views (device status, experiment configuration, live monitor, results and raw telemetry, adaptive testing, research comparison and audit log) and CSV and JSON export of raw samples.
 \end{itemize}
 
-\purpsub{6.2 Research Outcomes}
+\purpsub{7.2 Research Outcomes}
 \begin{itemize}
 \item\relax Evidence, with confidence intervals over repeated seeds, on whether adaptive selection reaches the first timing failure and finds more distinct failure signatures than random and grid selection at equal budgets of 15, 30 and 50 experiments. The hypothesis that the median experiments-to-first-failure is at least 30\% lower than random is to be tested and may be rejected.
 \item\relax An ablation showing which term of the acquisition matters, and a measured discrepancy rate for firmware self-reports.
 \item\relax A reproducible open design and a paper draft, kept honest about simulation versus hardware and about what the absence of failures does not prove.
 \end{itemize}
 
-\purpsub{6.3 Deliverables Checklist}
-\par\nopagebreak\noindent{\setstretch{1}\small\bfseries Table 6.1: Deliverables and target timeline}\par\nopagebreak\vspace{2pt}
+\purpsub{7.3 Deliverables Checklist}
+\par\nopagebreak\noindent{\setstretch{1}\small\bfseries Table 7.1: Deliverables and target timeline}\par\nopagebreak\vspace{2pt}
 \renewcommand{\arraystretch}{1.5}
 \begin{longtable}{|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.55\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.345\linewidth}|}
 \hline
@@ -503,11 +599,11 @@ Evaluation Report \& Results & Week 12 \\ \hline
 Final Project Report, Paper Draft \& Presentation & Week 13 \\ \hline
 \end{longtable}
 
-\purpsec{7. Evaluation Metrics \& Validation Plan}
+\purpsec{8. Evaluation Metrics \& Validation Plan}
 \dredrule
 \Needspace{14\baselineskip}
 \textbf{Research questions.}
-\par\nopagebreak\noindent{\setstretch{1}\small\bfseries Table 7.1: Research questions and hypotheses (to be pre-registered before the final runs)}\par\nopagebreak\vspace{2pt}
+\par\nopagebreak\noindent{\setstretch{1}\small\bfseries Table 8.1: Research questions and hypotheses (to be pre-registered before the final runs)}\par\nopagebreak\vspace{2pt}
 \renewcommand{\arraystretch}{1.4}
 \begin{longtable}{|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small\bfseries}p{0.10\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.43\linewidth}|>{\raggedright\arraybackslash\setlength{\parskip}{0pt}\setstretch{1}\small}p{0.37\linewidth}|}
 \hline
@@ -543,7 +639,7 @@ RQ-T5 & Do simulator conclusions transfer to hardware? & Exploratory; reported a
 \item\relax Results use honest language: a counterexample was found, or no failure was found within the budget. Neither is ever described as proof that the device is safe.
 \end{itemize}
 
-\purpsec{8. References}
+\purpsec{9. References}
 \dredrule
 \begingroup
 \setstretch{1}\setlength{\parskip}{6pt}\sloppy\emergencystretch=3em\urlstyle{same}
@@ -604,27 +700,5 @@ RQ-T5 & Do simulator conclusions transfer to hardware? & Exploratory; reported a
 \refitem{[27]\hspace{0.5em}Espressif Systems, \textit{ESP32-WROOM-32 Datasheet}. [Online]. Available: \url{https://www.espressif.com/sites/default/files/documentation/esp32-wroom-32_datasheet_en.pdf}}
 
 \endgroup
-
-\vspace{6pt}\Needspace{12\baselineskip}
-\purpsec{9. Declaration \& Signatures}
-\dredrule
-{\itshape I/We hereby declare that this project synopsis is our original work carried out as part of the Experiential Learning course. This work has not been submitted elsewhere for any other degree or examination. All sources of information have been duly acknowledged.}
-
-\vspace{6pt}
-\noindent\begin{minipage}[t]{0.5\linewidth}
-\setstretch{1.15}
-\textbf{Student Signature:}\\[1.1cm]
-\rule{0.93\linewidth}{0.5pt}\\[-2pt]
-{\itshape\small\color{gtext}Kavin Krishnan C (1RV24CS126), Chinmai Kiran Shetti (1RV24CS068), Sumukha Upadhyaya (1RV24IS130), Snehal Reddy Thadigotla (1RV24IS126), Sutej R Haritsa (1RV24CY055)}\\
-{\itshape\small\color{gtext}Date: \rule[-2pt]{3.4cm}{0.4pt}}
-\end{minipage}%
-\vrule\hspace{8pt}%
-\begin{minipage}[t]{0.46\linewidth}
-\setstretch{1.15}
-\textbf{Guide Signature:}\\[1.1cm]
-\rule{\linewidth}{0.5pt}\\[-2pt]
-{\itshape\small\color{gtext}Dr. H K Krishappa}\\
-{\itshape\small\color{gtext}Date: \rule[-2pt]{3.4cm}{0.4pt}}
-\end{minipage}
 
 \end{document}
