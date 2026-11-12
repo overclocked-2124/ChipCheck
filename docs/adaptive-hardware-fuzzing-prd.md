@@ -2660,7 +2660,7 @@ Median/IQR with 95 % bootstrap CIs; Kaplan–Meier curves for censored time-to-f
 
 ### 52.2 Known test gaps and defects found while documenting
 
-1. The added Console proxy test uses the path `/api/capabilities`, which is **not** an allow-listed route (the real route is `/api/devices/{id}/capabilities`). The test has never been executed and should be corrected before merge.
+1. The added Console proxy test route was corrected to use the allow-listed route `/api/devices/{id}/capabilities`.
 2. The Console unit tests cannot run in the current environment (see above).
 3. No test exercises `PySerialLineTransport` against a real or virtual serial port.
 4. No test exercises the Console proxy's `/api/*` query-parameter allow-list for all routes.
