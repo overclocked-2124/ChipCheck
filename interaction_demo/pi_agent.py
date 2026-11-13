@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Raspberry Pi side of the ChipCheck interaction demo. Copy this one file to the Pi.
 
-    python3 pi_agent.py --token SECRET                 # real GPIO (needs: sudo apt install python3-gpiozero)
-    python3 pi_agent.py --token SECRET --fake          # no GPIO, for testing the link
+    python3 pi_agent.py                                # real GPIO (needs: sudo apt install python3-gpiozero)
+    python3 pi_agent.py --fake                         # no GPIO, for testing the link
 
 The laptop sends POST /run with three 0-255 values. The agent sets them as PWM duty on the LED pins,
 listens for the buzzer on a digital sound-sensor pin, and replies with the measurements.
@@ -104,7 +104,7 @@ def make_handler(bench, token):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--token", required=True, help="shared secret; the laptop sends it as a Bearer token")
+    ap.add_argument("--token", default="demo", help="shared secret, default 'demo' (same default on the laptop); change it on both sides to lock it down")
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=8800)
     ap.add_argument("--leds", default="18,13,19", help="BCM pins for LED 1,2,3 (PWM-capable: 12,13,18,19)")

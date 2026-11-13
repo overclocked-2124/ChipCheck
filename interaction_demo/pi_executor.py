@@ -4,7 +4,7 @@ import json, os, urllib.request, urllib.error
 
 def execute(command, url=None, token=None, timeout=15):
     url = (url or os.environ["CHIPCHECK_PI_URL"]).rstrip("/")
-    token = token or os.environ.get("CHIPCHECK_PI_TOKEN", "")
+    token = token or os.environ.get("CHIPCHECK_PI_TOKEN", "demo")
     ids = {k: command[k] for k in ("campaign_id", "batch_id", "experiment_id")}
     req = urllib.request.Request(url + "/run", data=json.dumps(command).encode(), method="POST",
                                  headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"})

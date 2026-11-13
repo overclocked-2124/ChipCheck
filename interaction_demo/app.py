@@ -43,7 +43,7 @@ class Handler(BaseHTTPRequestHandler):
             if not url: return self.reply(200, {'mode': 'simulator'})
             try:
                 import urllib.request
-                req = urllib.request.Request(url.rstrip('/') + '/health', headers={'Authorization': 'Bearer ' + os.environ.get('CHIPCHECK_PI_TOKEN', '')})
+                req = urllib.request.Request(url.rstrip('/') + '/health', headers={'Authorization': 'Bearer ' + os.environ.get('CHIPCHECK_PI_TOKEN', 'demo')})
                 with urllib.request.urlopen(req, timeout=2) as r: info = json.loads(r.read())
                 return self.reply(200, {'mode': 'pi', 'reachable': True, 'fake': info.get('fake', False), 'url': url})
             except Exception as e: return self.reply(200, {'mode': 'pi', 'reachable': False, 'url': url, 'error': str(e)})

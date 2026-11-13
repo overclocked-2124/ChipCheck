@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Laptop side. Usage: interaction_demo/run_bridge.sh <PI_IP> <TOKEN> [PORT]
+# Laptop side. Usage: interaction_demo/run_bridge.sh <PI_IP> [TOKEN] [PI_PORT]   (token defaults to "demo")
 # Starts the demo website on all interfaces and sends campaign runs and rig probes to the Pi agent.
 set -euo pipefail
-PI_IP="${1:?usage: run_bridge.sh <PI_IP> <TOKEN> [PI_PORT]}"; TOKEN="${2:?token}"; PI_PORT="${3:-8800}"
+PI_IP="${1:?usage: run_bridge.sh <PI_IP> [TOKEN] [PI_PORT]}"; TOKEN="${2:-demo}"; PI_PORT="${3:-8800}"
 cd "$(dirname "$0")/.."
 echo "Checking Pi agent at http://$PI_IP:$PI_PORT ..."
 curl -fsS --max-time 4 -H "Authorization: Bearer $TOKEN" "http://$PI_IP:$PI_PORT/health" && echo || { echo "Pi agent not reachable (same Wi-Fi? agent running? token matches?)"; exit 1; }

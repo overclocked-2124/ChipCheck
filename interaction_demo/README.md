@@ -23,7 +23,7 @@ Current limits: the logical contract is fixed in code, the results report is a J
 The laptop runs the planner and this server; the Pi runs `pi_agent.py` and applies each command.
 
 1. Laptop hotspot (Linux): `nmcli device wifi hotspot ifname wlp2s0 ssid chipcheck password 'choose-a-password'` (use your Wi-Fi interface name from `nmcli device`). The laptop is then `10.42.0.1`.
-2. Join the Pi to that Wi-Fi, copy `interaction_demo/pi_agent.py` to it, and run `python3 pi_agent.py --token SECRET` (add `--fake` to test the link without GPIO). Defaults: LEDs on BCM 18, 13, 19; sound sensor output on BCM 17; port 8800.
-3. On the laptop: `CHIPCHECK_PI_URL=http://<pi-ip>:8800 CHIPCHECK_PI_TOKEN=SECRET CHIPCHECK_DEMO_HOST=0.0.0.0 .venv/bin/python -m interaction_demo.app`. The startup line says which executor is in use. Campaign runs and the bench rig probes both go to the Pi.
+2. Join the Pi to that Wi-Fi, copy `interaction_demo/pi_agent.py` to it, and run `python3 pi_agent.py` (add `--fake` to test the link without GPIO). Defaults: LEDs on BCM 18, 13, 19; sound sensor output on BCM 17; port 8800.
+3. On the laptop: `CHIPCHECK_PI_URL=http://<pi-ip>:8800 CHIPCHECK_PI_TOKEN=demo CHIPCHECK_DEMO_HOST=0.0.0.0 .venv/bin/python -m interaction_demo.app`. The startup line says which executor is in use. Campaign runs and the bench rig probes both go to the Pi.
 
 The Pi forces all duties to 0 on start, on error and on exit. If the Pi is unreachable the experiment is recorded ABORTED and does not train the planner. This is not a reviewed safety design; do not connect anything beyond LEDs with series resistors and a sound sensor.
