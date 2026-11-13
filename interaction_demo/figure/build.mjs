@@ -110,7 +110,7 @@ function breadboard() {
     const s = { x: x - BAR_W / 2, y: BAR_Y + 4.5, w: BAR_W, d: 3, r: 0.6 };
     out.push(S(k.slabOf(s, BB_H, 0.5, P, 2), { tone: "lo", crease: "none" }));
     out.push(L(k.topTicks(s.x + 1, s.x + s.w - 1, 3, 5, s.y + 0.6, BB_H + 0.5, [1, 1.8], P).major, { tone: "mid" }));
-    out.push(T(x, BAR_Y + 14, BB_H, `LED ${i + 1} · GPIO ${PINS[i]}`, 2.6, "mid"));
+    out.push(T(x, BAR_Y + 14, BB_H, `${['BLUE', 'GREEN', 'YELLOW'][i]} · GPIO ${PINS[i]}`, 2.6, "mid"));
   });
   return out.join("");
 }
@@ -172,7 +172,7 @@ const waves = [0, 1, 2].map((i) => `<path data-wave="${i}" class="iso-line" data
 
 const body = [
   plate(), piBoard(), header(), breadboard(),
-  ...[0, 1, 2].map((i) => `<g data-knob="${i}" tabindex="0" role="slider" aria-label="LED ${i + 1} duty value, 0 to 255" aria-valuemin="0" aria-valuemax="255" aria-valuenow="128">${ledPart(i)}<path data-pointer="${i}" class="iso-line" data-tone="lit" data-free="start" d="${barD(128, i)}" style="stroke-width:1.6"/></g>`),
+  ...[0, 1, 2].map((i) => `<g data-knob="${i}" tabindex="0" role="slider" aria-label="${['Blue', 'Green', 'Yellow'][i]} LED level, 0 to 255" aria-valuemin="0" aria-valuemax="255" aria-valuenow="128">${ledPart(i)}<path data-pointer="${i}" class="iso-line" data-tone="lit" data-free="start" d="${barD(128, i)}" style="stroke-width:1.6"/></g>`),
   buzzer(), waves, wires(),
 ];
 

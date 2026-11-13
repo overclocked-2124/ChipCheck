@@ -27,3 +27,9 @@ The laptop runs the planner and this server; the Pi runs `pi_agent.py` and appli
 3. On the laptop: `CHIPCHECK_PI_URL=http://<pi-ip>:8800 CHIPCHECK_PI_TOKEN=demo CHIPCHECK_DEMO_HOST=0.0.0.0 .venv/bin/python -m interaction_demo.app`. The startup line says which executor is in use. Campaign runs and the bench rig probes both go to the Pi.
 
 The Pi forces all duties to 0 on start, on error and on exit. If the Pi is unreachable the experiment is recorded ABORTED and does not train the planner. This is not a reviewed safety design; do not connect anything beyond LEDs with series resistors and a sound sensor.
+
+## The injected fault (what the search is trying to find)
+
+`fault_injection.py` is the script that induces the problem, kept separate from the code that runs the tests and hidden from the planner. The buzzer is meant to be on all the time. The fault: when the **blue** and **green** LEDs are fully on (3.3 V, duty 250 to 255) and the **yellow** LED is between **2.7 V and 3.3 V** (duty 209 to 255), the buzzer wrongly goes silent. Run `python -m interaction_demo.fault_injection` to print the exact range and its size. The same definition drives the laptop simulator and the Pi agent.
+
+For a real buzzer, wire an ACTIVE buzzer (+ to a free GPIO, - to GND) and start the agent with `--buzzer 21`. The agent keeps it buzzing and switches it off only inside the fault range. Without `--buzzer` or `--sensor` the Pi reports the commanded state.

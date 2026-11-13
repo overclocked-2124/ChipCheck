@@ -1,12 +1,12 @@
-"""Synthetic device; fault regions are deliberately hidden from the planner."""
+"""Synthetic device for the laptop-only demo. The fault comes from fault_injection.py and is hidden from the planner."""
+from interaction_demo.fault_injection import buzzer_should_sound
+
 
 def execute(command):
     p = command['parameters']
     a, b, c = (p[f'led{i}_value'] for i in range(1, 4))
-    # Artificial fault regions for demonstrating discovery, not real hardware behavior.
-    failed = (70 <= a <= 155 and 110 <= b <= 205 and 55 <= c <= 155) or (175 <= a <= 245 and 25 <= b <= 120 and 145 <= c <= 235)
+    ok = buzzer_should_sound(a, b, c)
     return {**{k: command[k] for k in ('campaign_id', 'batch_id', 'experiment_id')},
             'status': 'COMPLETED', 'applied_parameters': dict(p),
-            'measurements': {'buzzer_detected': not failed, 'sound_level': 0 if failed else 62.5,
-                             'frequency_hz': 0 if failed else 2000},
-            'outcome': 'FAIL' if failed else 'PASS', 'measurement_quality': 'VALID', 'source': 'simulated'}
+            'measurements': {'buzzer_detected': ok, 'sound_level': 62.5 if ok else 0, 'frequency_hz': 2000 if ok else 0},
+            'outcome': 'PASS' if ok else 'FAIL', 'measurement_quality': 'VALID', 'source': 'simulated'}

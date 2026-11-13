@@ -1,3 +1,4 @@
+from interaction_demo import simulator
 import tempfile
 import copy
 import unittest
@@ -35,7 +36,11 @@ class CampaignTest(unittest.TestCase):
             self.assertEqual([call['count'] for call in calls], [10, 10, 5])
             self.assertTrue(all(row['outcome'] == 'INVALID_EXPERIMENT' for row in calls[1]['history']))
             self.assertEqual(len({tuple(row['parameters'].values()) for row in first['experiments']}), 25)
-            self.c.run_pending(cid)
+            def mixed(cmd):  # the real fault is rare; force a mix of outcomes so Decision sees both
+                r = simulator.execute(cmd)
+                if cmd['parameters']['led1_value'] < 100: r = {**r, 'outcome': 'FAIL', 'measurements': {'buzzer_detected': False}}
+                return r
+            self.c.run_pending(cid, mixed)
             calls.clear()
             self.c.propose(cid, 5)
             self.assertEqual(len(calls[0]['history']), 25)
@@ -61,3 +66,14 @@ class CampaignTest(unittest.TestCase):
         with self.assertRaises(ValueError): self.c.propose(cid, 1)
 
 if __name__ == '__main__': unittest.main()
+
+
+class FaultTest(unittest.TestCase):
+    def test_injected_fault_range(self):
+        from interaction_demo.fault_injection import buzzer_should_sound as ok
+        self.assertFalse(ok(255, 255, 255))   # blue and green fully on (3.3 V), yellow at 3.3 V
+        self.assertFalse(ok(255, 255, 209))   # yellow at 2.7 V, the low edge
+        self.assertTrue(ok(255, 255, 208))    # yellow just below 2.7 V
+        self.assertTrue(ok(249, 255, 230))    # blue not fully on
+        self.assertTrue(ok(255, 200, 230))    # green not fully on
+        self.assertTrue(ok(0, 0, 0))
