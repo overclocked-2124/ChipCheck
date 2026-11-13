@@ -797,7 +797,7 @@ let sound = null, hum = 0, frame = 0, last = 0, clock = 0, visible = false, prob
 const pointerAt = (value, i) => lineOnTop([LX[i] - BAR_W / 2, BAR_Y], [LX[i] - BAR_W / 2 + BAR_W * (value / 255), BAR_Y], BAR_Z, P);
 function text() {
   const v = values.join(" / ");
-  if (sound === null) return v + " · probing";
+  if (sound === null) return v + (probeSeq && !probeTimer ? " · running on bench" : " · probing");
   return v + (sound.ok ? " · PASS · buzzer rings, " + sound.hz + " Hz" : " · FAIL · buzzer silent");
 }
 function draw() {
@@ -841,10 +841,13 @@ async function probe() {
   } catch (e) { if (seq === probeSeq) sound = null; }
   draw(); run();
 }
-function set(next, notify = true) {
+function set(next, notify = true, given = undefined) {
   next.forEach((v, i) => { values[i] = clamp(Math.round(v), 0, 255); knobs[i].setAttribute("aria-valuenow", String(values[i])); knobs[i].setAttribute("aria-valuetext", "LED " + (i + 1) + " " + values[i]); });
   sound = null; draw(); run();
-  clearTimeout(probeTimer); probeTimer = setTimeout(probe, 120);
+  clearTimeout(probeTimer);
+  if (given === 'wait') { probeSeq++; draw(); return; }                // a campaign step is running on the bench: no extra probe
+  if (given) { probeSeq++; sound = { ok: given.outcome === 'PASS', hz: given.measurements ? given.measurements.frequency_hz : 0 }; draw(); run(); return; }
+  probeTimer = setTimeout(probe, 120);
   if (notify) root.dispatchEvent(new CustomEvent("bench-change", { detail: { values: [...values] } }));
 }
 knobs.forEach((knob, i) => {
@@ -862,6 +865,6 @@ knobs.forEach((knob, i) => {
   });
 });
 root.set = (v) => set(v, false);
-window.benchFigure = { set: (v) => set(v, false), get: () => [...values] };
+window.benchFigure = { set: (v, given) => set(v, false, given), get: () => [...values] };
 set(values, false);
 </script></main></body></html>

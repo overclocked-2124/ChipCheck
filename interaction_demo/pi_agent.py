@@ -17,6 +17,7 @@ LOCK = threading.Lock()
 class Bench:
     def __init__(self, leds, sensor, fake):
         self.fake = fake
+        self.sensor = None
         self.duty = [0, 0, 0]
         if fake:
             return
@@ -89,8 +90,14 @@ def make_handler(bench, token):
                 vals = [p[f"led{i}_value"] for i in (1, 2, 3)]
                 if any(isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 255 for v in vals):
                     raise ValueError("led values must be integers 0-255")
+                t0 = time.monotonic()
                 with LOCK:
                     heard, level = bench.run(vals)
+                print(f"[{time.strftime('%H:%M:%S')}] run #{cmd.get('experiment_id', '?')} LED {vals[0]}/{vals[1]}/{vals[2]} "
+                      f"duty {round(vals[0] / 2.55)}%/{round(vals[1] / 2.55)}%/{round(vals[2] / 2.55)}% -> "
+                      f"{'PASS' if heard else 'FAIL'} buzzer {'rings' if heard else 'silent'} level {level} "
+                      f"({time.monotonic() - t0:.2f}s, {'sensor' if bench.sensor is not None else 'simulated buzzer'}) "
+                      f"from {self.address_string()}", flush=True)
                 out = {"applied_parameters": {f"led{i + 1}_value": v for i, v in enumerate(vals)},
                        "measurements": {"buzzer_detected": bool(heard), "sound_level": level, "frequency_hz": 2000 if heard else 0},
                        "outcome": "PASS" if heard else "FAIL", "measurement_quality": "VALID",
@@ -102,7 +109,8 @@ def make_handler(bench, token):
                 bench.safe(); self.reply(500, {"error": f"hardware error: {e}"})
 
         def log_message(self, fmt, *args):
-            print("%s %s" % (self.address_string(), fmt % args), flush=True)
+            if "/health" not in (fmt % args):  # the page polls /health every few seconds; keep the log readable
+                print("%s %s" % (self.address_string(), fmt % args), flush=True)
     return H
 
 
