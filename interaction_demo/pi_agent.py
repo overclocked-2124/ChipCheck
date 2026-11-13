@@ -22,7 +22,8 @@ class Bench:
             return
         from gpiozero import DigitalInputDevice, PWMLED  # imported late so --fake works anywhere
         self.leds = [PWMLED(p, frequency=1000) for p in leds]
-        self.sensor = DigitalInputDevice(sensor, pull_up=False)
+        # No sensor wired yet: the LEDs are real, the buzzer verdict comes from the stand-in rules.
+        self.sensor = DigitalInputDevice(sensor, pull_up=False) if sensor else None
         self.safe()
 
     def safe(self):
@@ -42,10 +43,13 @@ class Bench:
         high = total = 0
         end = time.monotonic() + window
         while time.monotonic() < end:  # a sound module pulses its output while it hears a tone
-            high += 1 if self.sensor.value else 0
+            high += 1 if self.sensor is not None and self.sensor.value else 0
             total += 1
             time.sleep(0.002)
         self.safe()
+        if self.sensor is None:
+            heard = fake_sound(values)
+            return heard, 62.5 if heard else 0.0
         share = high / max(total, 1)
         return share > 0.05, round(share, 3)
 
@@ -90,7 +94,7 @@ def make_handler(bench, token):
                 out = {"applied_parameters": {f"led{i + 1}_value": v for i, v in enumerate(vals)},
                        "measurements": {"buzzer_detected": bool(heard), "sound_level": level, "frequency_hz": 2000 if heard else 0},
                        "outcome": "PASS" if heard else "FAIL", "measurement_quality": "VALID",
-                       "source": "fake" if bench.fake else "raspberry-pi"}
+                       "source": "fake" if bench.fake else ("raspberry-pi" if bench.sensor is not None else "raspberry-pi (LEDs real, buzzer simulated)")}
                 self.reply(200, out)
             except (ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
                 bench.safe(); self.reply(400, {"error": str(e)})
@@ -108,7 +112,7 @@ def main():
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=8800)
     ap.add_argument("--leds", default="18,13,19", help="BCM pins for LED 1,2,3 (PWM-capable: 12,13,18,19)")
-    ap.add_argument("--sensor", type=int, default=27, help="BCM pin wired to the sound sensor's digital output")
+    ap.add_argument("--sensor", type=int, default=0, help="BCM pin wired to the sound sensor's digital output; 0 (default) means no sensor yet, so the buzzer verdict is simulated while the LEDs are real")
     ap.add_argument("--fake", action="store_true", help="no GPIO; stand-in device for testing the link")
     a = ap.parse_args()
     bench = Bench([int(x) for x in a.leds.split(",")], a.sensor, a.fake)
