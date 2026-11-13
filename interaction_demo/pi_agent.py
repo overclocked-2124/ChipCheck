@@ -108,7 +108,7 @@ def main():
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=8800)
     ap.add_argument("--leds", default="18,13,19", help="BCM pins for LED 1,2,3 (PWM-capable: 12,13,18,19)")
-    ap.add_argument("--sensor", type=int, default=17, help="BCM pin wired to the sound sensor's digital output")
+    ap.add_argument("--sensor", type=int, default=27, help="BCM pin wired to the sound sensor's digital output")
     ap.add_argument("--fake", action="store_true", help="no GPIO; stand-in device for testing the link")
     a = ap.parse_args()
     bench = Bench([int(x) for x in a.leds.split(",")], a.sensor, a.fake)
