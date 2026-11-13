@@ -1,0 +1,100 @@
+# ChipCheck Experiment Contract — Nano PWM Pin Interaction Test
+#
+# Tests an interaction fault in the Arduino Nano PWM demo fixture.
+# Three LED controls use a 0–3.3 V PWM-average-equivalent scale while monitoring
+# a buzzer on a separate pin. Certain voltage combinations cause
+# the buzzer to malfunction due to internal wiring interactions.
+#
+# The planner obtains ALL parameter definitions from this contract.
+# It does NOT know the hidden failure region.
+
+contract_id: "raspi_pins_v1"
+version: "1.0"
+name: "Arduino Nano PWM Pin Interaction Test"
+description: >
+  Tests a seeded interaction fault using an Arduino Nano PWM demo fixture.
+  Three LED controls use a 0-3.3 V PWM-average-equivalent scale while monitoring
+  a buzzer on a separate pin. Certain voltage combinations on the
+  LED pins cause the buzzer to malfunction due to internal wiring
+  interactions. The goal is to discover the failure-inducing voltage
+  region with minimum experiments.
+
+# ---------------------------------------------------------------------------
+# Parameters — the 3 LED voltages the planner can control
+# ---------------------------------------------------------------------------
+parameters:
+  - name: led1_voltage
+    type: continuous
+    low: 0.0
+    high: 3.3
+    step: 0.012941176470588235
+    default: 1.6564705882352942
+    description: "LED 1 level (0–3.3 V PWM-average equivalent; not a true DAC output)"
+
+  - name: led2_voltage
+    type: continuous
+    low: 0.0
+    high: 3.3
+    step: 0.012941176470588235
+    default: 1.6564705882352942
+    description: "LED 2 level (0–3.3 V PWM-average equivalent; not a true DAC output)"
+
+  - name: led3_voltage
+    type: continuous
+    low: 0.0
+    high: 3.3
+    step: 0.012941176470588235
+    default: 1.6564705882352942
+    description: "LED 3 level (0–3.3 V PWM-average equivalent; not a true DAC output)"
+
+# ---------------------------------------------------------------------------
+# Cross-parameter constraints — none for this domain
+# ---------------------------------------------------------------------------
+constraints: []
+
+# ---------------------------------------------------------------------------
+# Required measurements
+# ---------------------------------------------------------------------------
+required_measurements:
+  - buzzer_working
+
+# ---------------------------------------------------------------------------
+# Functional requirements
+# ---------------------------------------------------------------------------
+requirements:
+  - name: buzzer_functional
+    metric: buzzer_working
+    operator: ">="
+    threshold: 1
+    description: "Buzzer must be functioning correctly (1 = working, 0 = malfunctioning)"
+    is_primary: true
+
+# ---------------------------------------------------------------------------
+# Safety limits — voltages must stay in the safe analog range
+# ---------------------------------------------------------------------------
+safety_limits:
+  - parameter: led1_voltage
+    min_value: 0.0
+    max_value: 3.3
+    description: "LED 1 voltage in safe analog range"
+
+  - parameter: led2_voltage
+    min_value: 0.0
+    max_value: 3.3
+    description: "LED 2 voltage in safe analog range"
+
+  - parameter: led3_voltage
+    min_value: 0.0
+    max_value: 3.3
+    description: "LED 3 voltage in safe analog range"
+
+# ---------------------------------------------------------------------------
+# Budget and stopping conditions
+# ---------------------------------------------------------------------------
+budget: 200
+
+stopping_conditions:
+  max_confirmed_failures: 3
+  max_consecutive_passes: 100
+  safety_abort: true
+

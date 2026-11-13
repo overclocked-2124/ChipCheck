@@ -1,0 +1,140 @@
+# ChipCheck Experiment Contract — ESP32 Timing Test
+# This is the initial concrete experiment domain for ChipCheck.
+# The planner obtains all parameter definitions and limits from this contract.
+
+contract_id: "esp32_timing_v1"
+version: "1.0"
+name: "ESP32 Sensor Timing Test"
+description: >
+  Tests timing behavior of ESP32 sensor reading operations.
+  Measures sampling intervals, sensor-reading execution times,
+  jitter, and deadline compliance. Designed for LDR and other
+  sensor types with configurable parameters.
+
+# ---------------------------------------------------------------------------
+# Parameters
+# ---------------------------------------------------------------------------
+parameters:
+  - name: sampling_interval_ms
+    type: integer
+    low: 1
+    high: 100
+    step: 1
+    default: 10
+    description: "Requested time between consecutive sensor readings (ms)"
+
+  - name: duration_ms
+    type: integer
+    low: 100
+    high: 30000
+    step: 100
+    default: 5000
+    description: "Maximum experiment duration (ms). Upper bound — experiment stops when reached."
+
+  - name: sensor_type
+    type: categorical
+    choices: ["LDR", "BME280", "DHT22", "MPU6050"]
+    default: "LDR"
+    description: "Sensor type being tested. Categorical for future expansion."
+
+  - name: number_of_samples
+    type: integer
+    low: 10
+    high: 1000
+    step: 10
+    default: 500
+    description: "Maximum number of successful sensor readings. Upper bound — experiment stops when reached."
+
+  - name: deadline_ms
+    type: integer
+    low: 1
+    high: 50
+    step: 1
+    default: 5
+    description: >
+      Maximum allowed duration for an individual sensor-reading operation (ms).
+      A deadline miss occurs when a single read execution time exceeds this value.
+      This is NOT the sampling interval.
+
+# ---------------------------------------------------------------------------
+# Cross-parameter constraints
+# ---------------------------------------------------------------------------
+constraints:
+  - expression: "duration_ms >= sampling_interval_ms * 2"
+    description: "Duration must allow at least 2 samples at the requested interval"
+
+  - expression: "number_of_samples >= 2"
+    description: "Must request at least 2 samples for interval statistics"
+
+  - expression: "deadline_ms <= sampling_interval_ms"
+    description: "Deadline must not exceed sampling interval (read must finish before next sample)"
+
+# ---------------------------------------------------------------------------
+# Required measurements
+# ---------------------------------------------------------------------------
+required_measurements:
+  - total_samples
+  - missed_deadlines
+  - execution_time_ms
+
+# ---------------------------------------------------------------------------
+# Functional requirements
+# ---------------------------------------------------------------------------
+# NOTE: These thresholds are SYNTHETIC and configurable.
+# They do not represent actual hardware tolerances.
+requirements:
+  - name: deadline_compliance
+    metric: max_read_execution_time_ms
+    operator: "<="
+    threshold: 5.0  # Uses deadline_ms default; dynamically set by oracle
+    description: "Maximum sensor-read execution time must not exceed deadline"
+    is_primary: true
+
+  - name: jitter_limit
+    metric: average_jitter_ms
+    operator: "<="
+    threshold: 2.0
+    description: "Average timing jitter should be within tolerance (synthetic threshold)"
+    is_primary: false
+
+  - name: minimum_samples
+    metric: total_samples
+    operator: ">="
+    threshold: 5
+    description: "Must collect at least 5 successful samples"
+    is_primary: false
+
+# ---------------------------------------------------------------------------
+# Safety limits
+# ---------------------------------------------------------------------------
+safety_limits:
+  - parameter: sampling_interval_ms
+    min_value: 1
+    max_value: 100
+    description: "Sampling interval must be in safe range"
+
+  - parameter: duration_ms
+    min_value: 100
+    max_value: 30000
+    description: "Experiment duration must not exceed 30 seconds"
+
+  - parameter: number_of_samples
+    min_value: 10
+    max_value: 1000
+    description: "Sample count must be in safe range"
+
+  - parameter: deadline_ms
+    min_value: 1
+    max_value: 50
+    description: "Deadline must be in safe range"
+
+# ---------------------------------------------------------------------------
+# Budget and stopping conditions
+# ---------------------------------------------------------------------------
+budget: 100
+
+stopping_conditions:
+  max_confirmed_failures: 5
+  max_consecutive_passes: 50
+  safety_abort: true
+
