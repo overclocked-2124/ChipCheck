@@ -1,10 +1,9 @@
 """Campaign and planner logic. No simulator fault details are available here."""
 import json, random, sqlite3, uuid
 from pathlib import Path
-import optuna
+from activequal.decision.service.decision import propose as decision_propose
 from interaction_demo import simulator
 
-optuna.logging.set_verbosity(optuna.logging.WARNING)
 KEYS = tuple(f'led{i}_value' for i in range(1, 4))
 
 def validate(p):
@@ -46,11 +45,34 @@ class Campaign:
         valid = [r for r in rows if r['result'] and r['result']['outcome'] in ('PASS','FAIL') and r['result']['measurement_quality'] == 'VALID']
         failures = [r for r in valid if r['result']['outcome'] == 'FAIL']
         if purpose == 'confirm' and not failures: raise ValueError('No failure available to confirm')
-        sampler = optuna.samplers.TPESampler(seed=s['seed'] + batch, multivariate=True, warn_independent_sampling=False)
-        study = optuna.create_study(direction='minimize', sampler=sampler)
-        dists = {k: optuna.distributions.IntDistribution(0,255) for k in KEYS}
-        for r in valid:
-            study.add_trial(optuna.trial.create_trial(params=r['parameters'], distributions=dists, value=0 if r['result']['outcome']=='FAIL' else 1))
+        # The existing Decision service accepts at most 10 proposals per request.
+        # Pending candidates are recorded as invalid placeholders only for duplicate
+        # avoidance; they never become training outcomes.
+        decision_points = []
+        if purpose == 'explore' and s['planner'] in ('random', 'tpe'):
+            contract = {'contractVersion': 2, 'setup': {'dut': 'simulated-rpi-buzzer'},
+                        'controls': {k: {'type': 'integer', 'min': 0, 'max': 255, 'step': 1, 'nominal': 0} for k in KEYS},
+                        'forbidden': [], 'campaign': {'budget': s['budget']}}
+            history = []
+            for row in rows:
+                result = row['result']
+                outcome = result['outcome']
+                if outcome in ('PASS', 'FAIL') and result['measurement_quality'] == 'VALID':
+                    applied = result['applied_parameters']
+                    history.append({'conditions': applied, 'outcome': 'PASS' if outcome == 'PASS' else 'DUT_FAILURE',
+                                    'robustness': 1.0 if outcome == 'PASS' else 0.0})
+                    if applied != row['parameters']:
+                        history.append({'conditions': row['parameters'], 'outcome': 'INVALID_EXPERIMENT'})
+                else:
+                    history.append({'conditions': row['parameters'], 'outcome': 'INVALID_EXPERIMENT'})
+            while len(decision_points) < count:
+                result = decision_propose({'contract': contract, 'method': s['planner'], 'seed': s['seed'],
+                                           'count': min(10, count - len(decision_points)), 'history': history})
+                points = [item['conditions'] for item in result['tests']]
+                if not points:
+                    raise ValueError('Decision could not propose enough new candidates')
+                decision_points.extend(points)
+                history.extend({'conditions': p, 'outcome': 'INVALID_EXPERIMENT'} for p in points)
         forest = None
         if s['planner'] == 'forest' and len({r['result']['outcome'] for r in valid}) == 2:
             from sklearn.ensemble import RandomForestClassifier
@@ -62,6 +84,8 @@ class Campaign:
                 elif purpose == 'boundary' and failures:
                     base = failures[n % len(failures)]['parameters']; p = dict(base)
                     axis = n % 3; p[KEYS[axis]] = max(0,min(255,p[KEYS[axis]] + rng.choice([-1,1])*rng.choice([5,10,20,35,50])))
+                elif decision_points:
+                    p = decision_points[n]
                 elif forest is not None and n % 4 != 0:
                     pool = [[rng.randrange(256) for _ in KEYS] for _ in range(256)]
                     probs = forest.predict_proba(pool)[:, 1]
@@ -71,8 +95,6 @@ class Campaign:
                         return (1 - 2 * abs(float(probability) - 0.5)) + 0.3 * distance
                     point = max(zip(pool, probs), key=score)[0]
                     p = dict(zip(KEYS, point))
-                elif s['planner'] == 'tpe' and n % 4 != 0:
-                    trial = study.ask(); p = {k: trial.suggest_int(k,0,255) for k in KEYS}
                 else: p = {k:rng.randrange(256) for k in KEYS}
                 key = tuple(p[k] for k in KEYS)
                 if purpose == 'confirm' or key not in seen: break
